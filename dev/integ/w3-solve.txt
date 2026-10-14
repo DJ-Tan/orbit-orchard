@@ -1,0 +1,26 @@
+
+=== World 3: Fold Nebula (22 levels) ===
+[ok  ] #0 w3-01 First Fold             hardest=4.02%  #0:251(warp202)
+[ok  ] #1 w3-02 Hidden Pocket          hardest=3.35%  #0:209(warp209)
+[ok  ] #2 w3-03 Chain Stitch           hardest=2.88%  #0:180(warp278)
+[ok  ] #3 w3-04 Crossed Threads        hardest=2.90%  #0:181(warp180) #1:181(warp180)
+[ok  ] #4 w3-05 Sunlit Seam            hardest=1.35%  #0:84(warp84)
+[ok  ] #5 w3-06 Rising Nap             hardest=1.94%  #0:121
+[ok  ] #6 w3-07 Bias Cut               hardest=1.51%  #0:94
+[ok  ] #7 w3-08 Wind River             hardest=0.58%  #0:36
+[ok  ] #8 w3-09 Backstitch             hardest=1.09%  #0:68
+[ok  ] #9 w3-10 Warp and Weft          hardest=0.87%  #0:54(warp54) #1:306
+[ok  ] #10 w3-11 Shuttle Rush           hardest=0.88%  #0:55(boost48)
+[ok  ] #11 w3-12 Slack Thread           hardest=0.74%  #0:46(boost40)
+[ok  ] #12 w3-13 Tension                hardest=0.99%  #0:62(boost80)
+[ok  ] #13 w3-14 Comet Gate             hardest=0.87%  #0:54(boost53)
+[ok  ] #14 w3-15 Hairpin Pleat          hardest=0.63%  #0:39(boost38)
+[ok  ] #15 w3-16 Zigzag Seam            hardest=0.79%  #0:49(boost82)
+[ok  ] #16 w3-17 Hem and Drop           hardest=0.80%  #0:50(warp43,boost48)
+[ok  ] #17 w3-18 Pollen Loom            hardest=0.77%  #0:48
+[ok  ] #18 w3-19 Blind Stitch           hardest=0.83%  #0:69(warp68) #1:52(boost35)
+[ok  ] #19 w3-20 Selvage                hardest=0.75%  #0:47(boost45)
+[ok  ] #20 w3-21 Tangled Skein          hardest=0.38%  #0:24(warp40)
+[ok  ] #21 w3-22 Heart of the Fold      hardest=0.18%  #0:11(warp11) #1:11(boost8)
+
+All levels valid and solvable.

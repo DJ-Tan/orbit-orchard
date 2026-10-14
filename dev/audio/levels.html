@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orchard SFX Levels</title>
+<style>
+  body { margin: 0; padding: 16px; background: #0e1128; color: #f4ecdc; font: 13px/1.5 ui-monospace, monospace; }
+  .bad { color: #ff7a45; }
+</style>
+</head>
+<body>
+<h1>SFX offline levels</h1>
+<pre id="out"></pre>
+<script>
+  const NAMES = ["launch", "plant", "pollen", "bounce", "warp", "boost", "shield", "swallow", "burn", "crash", "lost", "aim", "golden",
+    "click", "hover", "open", "close", "tick", "unlock", "achievement", "star", "win", "lose"];
+  const Real = window.AudioContext;
+  let off = null;
+  window.AudioContext = function () {
+    off = new OfflineAudioContext(2, 48000 * 4, 48000);
+    Object.defineProperty(off, "state", { get: () => "running" });
+    Object.defineProperty(off, "currentTime", { get: () => (/late/.test(location.search) ? 1.5 : 0) });
+    let nc = 0;
+    const realComp = off.createDynamicsCompressor.bind(off);
+    if (/raw|nocomp|nolim/.test(location.search)) off.createDynamicsCompressor = () => {
+      nc++;
+      if ((/nocomp/.test(location.search) && nc === 2) || (/nolim/.test(location.search) && nc === 1)) return realComp();
+      const g = off.createGain();
+      for (const k of ["threshold", "knee", "ratio", "attack", "release"]) g[k] = { value: 0 };
+      return g;
+    };
+    return off;
+  };
+  const lines = [];
+  function load(n) {
+    return new Promise((res) => {
+      const s = document.createElement("script");
+      s.src = "../../js/audio.js?" + n;
+      s.onload = res;
+      document.body.appendChild(s);
+    });
+  }
+  const MK = (location.search.match(/music=(\w+)/) || [])[1];
+  if (MK) {
+    const T0 = performance.now(), SPEED = 3, LEN = 24;
+    window.AudioContext = function () {
+      off = new OfflineAudioContext(2, 48000 * (LEN + 4), 48000);
+      Object.defineProperty(off, "state", { get: () => "running" });
+      Object.defineProperty(off, "currentTime", { get: () => ((performance.now() - T0) / 1000) * SPEED });
+      return off;
+    };
+    AudioNode.prototype.disconnect = function () {};
+    const oStop = AudioScheduledSourceNode.prototype.stop;
+    AudioScheduledSourceNode.prototype.stop = function (t) {
+      oStop.call(this, t);
+      const me = this;
+      setTimeout(() => { if (me.onended) me.onended(); }, Math.max(0, (((t || 0) - off.currentTime) / SPEED) * 1000));
+    };
+    load("m").then(() => {
+      window.OrchardAudio.unlock();
+      window.OrchardAudio.music(/^\d$/.test(MK) ? +MK : MK);
+      const wait = setInterval(async () => {
+        if (off.currentTime < LEN) return;
+        clearInterval(wait);
+        window.OrchardAudio.music(null);
+        const buf = await off.startRendering();
+        const d = buf.getChannelData(0), win = 48000;
+        let peak = 0, loud = 0;
+        const segs = [];
+        for (let s0 = 0; s0 + win <= 48000 * LEN; s0 += win) {
+          let sum = 0;
+          for (let j = s0; j < s0 + win; j++) { const a = Math.abs(d[j]); if (a > peak) peak = a; sum += a * a; }
+          const r = Math.sqrt(sum / win);
+          loud = Math.max(loud, r);
+          segs.push((20 * Math.log10(r || 1e-9)).toFixed(0));
+        }
+        console.log("MUSIC " + MK + " peak " + (20 * Math.log10(peak || 1e-9)).toFixed(1) + " maxRms " + (20 * Math.log10(loud || 1e-9)).toFixed(1) + " perSec " + segs.join(","));
+      }, 100);
+    });
+  } else (async () => {
+    for (let i = 0; i < NAMES.length; i++) {
+      const name = NAMES[i];
+      await load(i);
+      window.OrchardAudio.unlock();
+      window.OrchardAudio.sfx(name, { power: 1, count: 12, k: 10, n: 3, stars: 3 });
+      const buf = await off.startRendering();
+      let peak = 0, sum = 0, last = 0;
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < d.length; j++) { const a = Math.abs(d[j]); if (a > peak) peak = a; sum += a * a; if (a > 0.001) last = j; }
+      const rms = Math.sqrt(sum / d.length);
+      const txt = name.padEnd(12) + " peak " + peak.toFixed(3) + "  dBFS " + (20 * Math.log10(peak || 1e-9)).toFixed(1) + "  rms " + rms.toFixed(4) + "  tail " + (last / 48000).toFixed(2) + "s";
+      lines.push(txt);
+      console.log("LEVEL " + txt);
+    }
+    document.getElementById("out").textContent = lines.join("\n");
+    console.log("LEVELS DONE");
+  })().catch((e) => console.log("LEVEL ERROR " + e));
+</script>
+</body>
+</html>

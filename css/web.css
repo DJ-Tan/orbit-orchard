@@ -1,0 +1,8 @@
+.web-sign { margin-top: 4px; gap: 8px; font-size: var(--t-sm); color: var(--dim); }
+.web-sign:hover { color: var(--text); }
+.web-sign[hidden] { display: none; }
+svg.glogo { width: 18px; height: 18px; flex: none; }
+.cc-id .em { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.cc-id .em[hidden] { display: none; }
+.cloud-card [data-c="signin"] { gap: 8px; }
+.cloud-card [data-c="signin"] svg.glogo { background: #fff; border-radius: 50%; padding: 2px; width: 20px; height: 20px; }

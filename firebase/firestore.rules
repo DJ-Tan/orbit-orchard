@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function within(m, n) {
+      return m is map && m.size() <= n;
+    }
+
+    function b64(s, lo, hi) {
+      return s is string && s.size() >= lo && s.size() <= hi && s.matches('[A-Za-z0-9_-]+');
+    }
+
+    function validSave(d) {
+      return d.keys().hasAll(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt'])
+        && d.keys().hasOnly(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt', 'seen', 'coach', 'announced', 'skins', 'at'])
+        && d.v == 2
+        && d.gen is number
+        && d.settingsAt is number
+        && within(d.levels, 400)
+        && within(d.ach, 200)
+        && within(d.fails, 400)
+        && within(d.stats, 300)
+        && within(d.flora, 300)
+        && d.daily is map && within(d.daily.get('days', {}), 70)
+        && d.wallet is map
+        && within(d.wallet.get('earn', {}), 15000)
+        && within(d.wallet.get('spend', {}), 3000)
+        && within(d.wallet.get('frost', {}), 400)
+        && within(d.settings, 32)
+        && within(d.get('seen', {}), 300)
+        && within(d.get('coach', {}), 300)
+        && within(d.get('announced', {}), 50)
+        && within(d.get('skins', {}), 50);
+    }
+
+    function validFriends(d) {
+      return d.keys().hasOnly(['v', 'f', 'share', 'code', 'nm']) && within(d.get('f', {}), 500);
+    }
+
+    function validKeys(d) {
+      return d.keys().hasOnly(['v', 'jwk', 'at']) && within(d.get('jwk', {}), 8);
+    }
+
+    function validPins(d) {
+      return d.keys().hasOnly(['v', 'p']) && within(d.get('p', {}), 500);
+    }
+
+    function validChal(d) {
+      return d.keys().hasOnly(['v', 'out', 'res', 'to', 'from']) && within(d.get('out', {}), 40) && within(d.get('res', {}), 70);
+    }
+
+    function validSent(d) {
+      return d.keys().hasOnly(['v', 's']) && within(d.get('s', {}), 300);
+    }
+
+    function validData(name, d) {
+      return (name == 'save' && validSave(d))
+        || (name == 'friends' && validFriends(d))
+        || (name == 'keys' && validKeys(d))
+        || (name == 'pins' && validPins(d))
+        || (name == 'chal' && validChal(d))
+        || (name == 'sent' && validSent(d));
+    }
+
+    function validPub(d) {
+      return d.keys().hasAll(['x', 'y', 'at']) && d.keys().hasOnly(['x', 'y', 'at', 'n', 's'])
+        && b64(d.x, 43, 43) && b64(d.y, 43, 43) && d.at is number
+        && (!('n' in d) || (d.n is string && d.n.size() > 0 && d.n.size() <= 40))
+        && (!('s' in d) || d.s == true);
+    }
+
+    function validCard(d) {
+      return d.keys().hasOnly(['iv', 'ct', 'at']) && d.keys().hasAll(['iv', 'ct', 'at'])
+        && b64(d.iv, 16, 16) && b64(d.ct, 1, 4096) && d.at is number;
+    }
+
+    function validItem(d) {
+      return d.keys().hasOnly(['from', 'kind', 'iv', 'ct', 'at', 'k']) && d.keys().hasAll(['from', 'kind', 'iv', 'ct', 'at', 'k'])
+        && d.from == request.auth.uid
+        && d.kind in ['chal', 'res']
+        && b64(d.iv, 16, 16) && b64(d.ct, 1, 2048)
+        && d.at is int && d.at > request.time.toMillis() - 86400000 && d.at < request.time.toMillis() + 86400000
+        && d.k is int && d.k > d.at && d.k <= d.at + 22 * 86400000;
+    }
+
+    match /users/{uid}/data/{name} {
+      allow read, delete: if signedInAs(uid);
+      allow create, update: if signedInAs(uid) && validData(name, request.resource.data);
+    }
+
+    match /pub/{uid} {
+      allow get: if signedIn();
+      allow create, update: if signedInAs(uid) && validPub(request.resource.data);
+      allow delete: if signedInAs(uid);
+    }
+
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn() && code.matches('[2-9A-HJKMNP-Z]{6}')
+        && request.resource.data.keys().hasOnly(['u']) && request.resource.data.u == request.auth.uid;
+      allow delete: if signedIn() && resource.data.u == request.auth.uid;
+    }
+
+    match /cards/{owner}/to/{reader} {
+      allow read: if signedInAs(owner) || signedInAs(reader);
+      allow create, update: if signedInAs(owner) && reader != owner && validCard(request.resource.data);
+      allow delete: if signedInAs(owner);
+    }
+
+    match /inbox/{uid}/items/{item} {
+      allow read: if signedInAs(uid);
+      allow create: if signedIn() && uid != request.auth.uid
+        && item.matches(request.auth.uid + '_[A-Za-z0-9_-]{16}')
+        && validItem(request.resource.data)
+        && exists(/databases/$(database)/documents/pub/$(uid));
+      allow delete: if signedInAs(uid) || (signedIn() && resource.data.from == request.auth.uid);
+    }
+  }
+}

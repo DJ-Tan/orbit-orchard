@@ -1,0 +1,1 @@
+[ok  ] #5 w5-06 Negative Mass          hardest=2.04%  #2:127

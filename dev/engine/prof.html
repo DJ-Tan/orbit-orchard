@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Engine Harness</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e20; color: #f4ead8; font: 12px/1.4 ui-monospace, Menlo, monospace; }
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #bar { position: fixed; left: 0; right: 0; top: 0; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; background: rgba(10,12,28,.72); z-index: 2; }
+  #bar button { font: inherit; color: inherit; background: #1b2142; border: 1px solid #3a4170; border-radius: 6px; padding: 3px 7px; cursor: pointer; }
+  #bar button.on { border-color: #f3d67a; color: #f3d67a; }
+  #bar .sep { width: 10px; }
+  #hud { position: fixed; right: 8px; bottom: 8px; white-space: pre; background: rgba(10,12,28,.7); padding: 6px 8px; border-radius: 6px; pointer-events: none; }
+  #log { position: fixed; left: 8px; bottom: 8px; max-height: 30vh; overflow: hidden; white-space: pre; background: rgba(10,12,28,.7); padding: 6px 8px; border-radius: 6px; pointer-events: none; }
+  #err { position: fixed; left: 8px; top: 60px; color: #ff6f6f; white-space: pre-wrap; z-index: 3; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="bar"></div>
+<div id="hud"></div>
+<div id="log"></div>
+<div id="err"></div>
+<script>
+  window.addEventListener("error", (e) => { document.getElementById("err").textContent += e.message + " @" + e.lineno + "\n"; });
+  const cerr = console.error.bind(console);
+  console.error = (...a) => { cerr(...a); const el = document.getElementById("err"); if (el.textContent.length < 600) el.textContent += a.map((x) => (x && x.stack) || String(x)).join(" ") + "\n"; };
+</script>
+<script src="../../js/sim.js"></script>
+<script src="testworld.js"></script>
+<script src="game.prof.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search), bar = document.getElementById("bar"), logEl = document.getElementById("log"), hudEl = document.getElementById("hud");
+  const worlds = window.ORCHARD_TEST_WORLDS;
+  const st = { world: +(q.get("world") || 1), level: +(q.get("level") || 1), skin: q.get("skin") || "nocturne", mode: "journey", diff: +(q.get("gen") || 0) };
+  const lines = [];
+  const log = (s) => { lines.push(s); if (lines.length > 14) lines.shift(); logEl.textContent = lines.join("\n"); };
+  const O = window.Orchard;
+  O.init(document.getElementById("stage"));
+  O.setViewInsets({ top: 44, right: 0, bottom: 30, left: 0 });
+  O.setSettings({ skin: st.skin, colorblind: q.get("cb") === "1", reducedMotion: q.get("rm") === "1", assist: q.get("assist") === "1" });
+  O.on("hud", (h) => { hudEl.textContent = JSON.stringify(h, null, 0).replace(/,/g, ", "); });
+  ["launch", "event", "toast", "win", "lose", "zenComplete", "settings"].forEach((n) => O.on(n, (p) => log(n + " " + JSON.stringify(p).slice(0, 120))));
+  const world = () => worlds[st.world - 1];
+  function load() {
+    if (st.diff) {
+      const t0 = performance.now(), lv = O.generateLevel(q.get("seed") || ("h" + Date.now()), { difficulty: st.diff });
+      log("generated d" + st.diff + " in " + (performance.now() - t0).toFixed(0) + "ms: " + lv.name);
+      O.loadLevel(lv, { world: world(), mode: st.mode });
+    } else O.loadLevel(world().levels[st.level - 1], { world: world(), mode: st.mode });
+    render();
+  }
+  function btn(label, on, fn) { const b = document.createElement("button"); b.textContent = label; if (on) b.className = "on"; b.onclick = () => { fn(); b.blur(); }; bar.appendChild(b); }
+  function sep() { const s = document.createElement("span"); s.className = "sep"; bar.appendChild(s); }
+  function render() {
+    bar.innerHTML = "";
+    worlds.forEach((w) => btn("W" + w.id, w.id === st.world, () => { st.world = w.id; load(); }));
+    sep();
+    world().levels.forEach((l, i) => btn(String(i + 1), !st.diff && i + 1 === st.level, () => { st.level = i + 1; st.diff = 0; load(); }));
+    sep();
+    ["nocturne", "daylight", "synthwave", "inkwell"].forEach((s) => btn(s, s === st.skin, () => { st.skin = s; O.setSettings({ skin: s }); render(); }));
+    sep();
+    const set = O.getSettings();
+    ["grid", "colorblind", "reducedMotion", "assist", "shake", "fastForward"].forEach((k) => btn(k, set[k], () => { O.setSettings({ [k]: !set[k] }); render(); }));
+    sep();
+    [1, 2, 3, 4, 5].forEach((d) => btn("gen" + d, st.diff === d, () => { st.diff = d; load(); }));
+    btn("zen:" + (st.mode === "zen"), st.mode === "zen", () => { st.mode = st.mode === "zen" ? "journey" : "zen"; load(); });
+    btn("showcase", false, () => { O.showcase(world()); render(); });
+    btn("pause", O.isPaused(), () => { O.setPaused(!O.isPaused()); render(); });
+  }
+  if (q.get("showcase") === "1") { O.showcase(q.get("world") === "0" ? null : world()); render(); }
+  else load();
+  const frames = +(q.get("frames") || 0), shoot = q.get("shoot");
+  if (frames || shoot) {
+    O._debug.advance(150);
+    if (shoot) { const a = shoot.split(",").map(Number); O._debug.shoot(a[0], a[1]); }
+    O._debug.advance(frames);
+  }
+  if (q.get("sow")) {
+    O._debug.advance(150);
+    q.get("sow").split(";").forEach((pair) => { const a = pair.split(",").map(Number); O._debug.sow(a[0], a[1]); O._debug.advance(12); });
+    O._debug.advance(+(q.get("after") || 150));
+  }
+  if (q.get("bench")) {
+    const t0 = performance.now(), n = +q.get("bench");
+    O._debug.advance(1);
+    const t1 = performance.now();
+    for (let i = 0; i < n; i++) O._debug.advance(1);
+    log(Object.entries(window.PROF).sort((a,b)=>b[1]-a[1]).slice(0,9).map(([k,v])=>k+":"+(v/(n+1)).toFixed(2)).join(" "));
+    log("bench " + n + " frames: " + ((performance.now() - t1) / n).toFixed(2) + " ms/frame (update+draw), first " + (t1 - t0).toFixed(1));
+  }
+  if (q.get("dbg")) { const S = O._debug.state; log("W" + S.W + " H" + S.H + " dpr" + S.DPR + " bg" + (S.bgC && S.bgC.width) + " pal" + !!S.pal + " phase " + S.phase + " view " + JSON.stringify(S.view) + " cv " + S.canvas.width); }
+})();
+</script>
+</body>
+</html>

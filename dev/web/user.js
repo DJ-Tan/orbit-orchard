@@ -1,0 +1,11 @@
+user_pref("devtools.console.stdout.content", true);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("datareporting.policy.dataSubmissionEnabled", false);
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("browser.download.folderList", 2);
+user_pref("browser.download.useDownloadDir", true);
+user_pref("browser.download.always_ask_before_handling_new_types", false);
+user_pref("browser.download.start_downloads_in_tmp_dir", false);
+user_pref("dom.disable_open_during_load", false);
+user_pref("network.http.max-persistent-connections-per-server", 32);
+user_pref("network.http.max-connections", 256);

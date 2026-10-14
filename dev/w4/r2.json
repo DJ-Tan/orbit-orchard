@@ -1,0 +1,18 @@
+[
+["w4-09","kind: \"fertile\", x: 1100, y: 500, r: 50","kind: \"fertile\", x: 1100, y: 500, r: 38"],
+["w4-09","{ kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 0 } },\n        { kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 2.0944 } },\n        { kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 4.1888 } },","{ kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 0 } },\n        { kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 1.5708 } },\n        { kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 3.1416 } },\n        { kind: \"barren\", r: 34, orbit: { p: 0, R: 140, w: 0.5, ph: 4.7124 } },"],
+["w4-10","r: 55, dens: 3000","r: 70, dens: 3200"],
+["w4-13","r: 50, dens: 3000","r: 65, dens: 3200"],
+["w4-13","r: 30,","r: 26,"],
+["w4-14","r: 30,","r: 26,"],
+["w4-15","r: 55, dens: 3000","r: 70, dens: 3200"],
+["w4-15","r: 40, need","r: 34, need"],
+["w4-15","{ kind: \"barren\", r: 36, orbit: { p: 0, R: 150, w: -1.0, ph: 0 } }","{ kind: \"barren\", r: 36, orbit: { p: 0, R: 150, w: -1.0, ph: 0 } },\n        { kind: \"barren\", r: 36, orbit: { p: 0, R: 150, w: -1.0, ph: Math.PI } }"],
+["w4-18","r: 50, dens: 3000","r: 60, dens: 3600"],
+["w4-18","r: 22,","r: 16,"],
+["w4-19","r: 30,","r: 26,"],
+["w4-19","r: 24,","r: 20,"],
+["w4-22","gap: 1.5","gap: 1.2"],
+["w4-22","r: 38, need","r: 34, need"],
+["w4-22","r: 22,","r: 20,"]
+]

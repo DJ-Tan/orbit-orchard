@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><canvas id="c" style="width:400px;height:300px"></canvas>
+<script src="../../js/sim.js"></script><script src="../../js/game.js"></script><script>window.GENHASH = null;</script>
+<script>
+const q = new URLSearchParams(location.search), S = +(q.get("n") || 20), out = [];
+function fetchHash() {}
+if (q.get("hash")) { const x = new XMLHttpRequest(); x.open("GET", "genhash.js", false); x.overrideMimeType("text/plain"); x.send(); console.log("[drive] firefox " + eval(x.responseText)()); }
+for (let d = 1; d <= 5; d++) {
+  const ts = [];
+  for (let k = 0; k < S; k++) { const t0 = performance.now(); Orchard.generateLevel(20261012 + k * 101, { difficulty: d }); ts.push(performance.now() - t0); }
+  ts.sort((a, b) => a - b);
+  out.push("d" + d + " avg " + (ts.reduce((a, b) => a + b) / S).toFixed(0) + " p90 " + ts[Math.floor(S * 0.9)].toFixed(0) + " max " + ts[S - 1].toFixed(0));
+}
+const a = JSON.stringify(Orchard.generateLevel(777, { difficulty: 5 })); if (q.get("hash")) { fetchHash(); }
+out.push("hash d5 seed777 " + a.length + " " + a.slice(0, 120));
+console.log("[drive] " + out.join(" | "));
+</script></body></html>

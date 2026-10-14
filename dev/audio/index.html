@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orchard Audio Bench</title>
+<style>
+  :root { color-scheme: dark; --bg: #0e1128; --panel: #1f2350; --ink: #f4ecdc; --dim: #a9a6c8; --acc: #ffd9a8; --ok: #8fc79a; --bad: #ff7a45; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 18px 0 8px; }
+  section { background: var(--panel); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { background: #2b1f4f; color: var(--ink); border: 1px solid #4a3f7a; border-radius: 6px; padding: 7px 11px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--acc); }
+  button.on { background: var(--acc); color: #1c0d12; }
+  label { display: flex; align-items: center; gap: 8px; margin: 4px 0; flex-wrap: wrap; }
+  input[type=range] { flex: 1; min-width: 120px; }
+  input[type=number] { width: 64px; background: #0e1128; color: var(--ink); border: 1px solid #4a3f7a; border-radius: 4px; padding: 3px; }
+  #beat { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #4a3f7a; transition: background .08s; vertical-align: middle; }
+  #beat.hit { background: var(--acc); }
+  #beat.down { background: var(--ok); }
+  #log { font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; color: var(--dim); max-height: 220px; overflow: auto; }
+  .err { color: var(--bad); }
+  #status { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Orchard Audio Bench</h1>
+<section>
+  <div class="grid">
+    <button id="unlock">Unlock audio</button>
+    <button id="mute">Mute</button>
+    <span>state: <span id="status">locked</span></span>
+    <span>beat <span id="beat"></span> <span id="beatTxt">-</span></span>
+  </div>
+  <label>master <input type="range" id="v-master" min="0" max="1" step="0.01"><span id="o-master"></span></label>
+  <label>music <input type="range" id="v-music" min="0" max="1" step="0.01"><span id="o-music"></span></label>
+  <label>sfx <input type="range" id="v-sfx" min="0" max="1" step="0.01"><span id="o-sfx"></span></label>
+</section>
+<section>
+  <h2>Music</h2>
+  <div class="grid" id="music"></div>
+</section>
+<section>
+  <h2>SFX options</h2>
+  <label>power <input type="range" id="o-power" min="0.05" max="1" step="0.01" value="0.6"><span id="o-power-v">0.6</span></label>
+  <label>count <input type="number" id="o-count" value="1" min="1"> k <input type="number" id="o-k" value="0" min="0"> stars <input type="number" id="o-stars" value="3" min="0" max="3"> n <input type="number" id="o-n" value="1" min="1" max="3"></label>
+  <label><input type="checkbox" id="o-auto" checked> auto-increment count / k / n</label>
+  <h2>Gameplay SFX</h2>
+  <div class="grid" id="sfx-game"></div>
+  <h2>UI SFX</h2>
+  <div class="grid" id="sfx-ui"></div>
+  <h2>Stress</h2>
+  <div class="grid">
+    <button id="burst">Burst 40 random</button>
+    <button id="plantRun">Plant run 1..10</button>
+    <button id="stars">Stars 1..3</button>
+    <button id="aimDrag">Aim drag 2 s</button>
+  </div>
+</section>
+<section>
+  <h2>Log</h2>
+  <div id="log"></div>
+</section>
+<script>
+  window.__errs = [];
+  window.addEventListener("error", (e) => { window.__errs.push(String(e.message)); logLine("error: " + e.message, true); });
+  const _ce = console.error;
+  console.error = function () { window.__errs.push([].join.call(arguments, " ")); logLine("console.error: " + [].join.call(arguments, " "), true); _ce.apply(console, arguments); };
+  function logLine(s, bad) {
+    const el = document.getElementById("log");
+    if (!el) return;
+    const d = document.createElement("div");
+    if (bad) d.className = "err";
+    d.textContent = s;
+    el.prepend(d);
+  }
+</script>
+<script src="../../js/audio.js"></script>
+<script>
+  const A = window.OrchardAudio;
+  const $ = (id) => document.getElementById(id);
+  const GAME = ["launch", "plant", "pollen", "bounce", "warp", "boost", "shield", "swallow", "burn", "crash", "lost", "aim", "golden"];
+  const UI = ["click", "hover", "open", "close", "tick", "unlock", "achievement", "star", "win", "lose"];
+  const KEYS = ["menu", 1, 2, 3, 4, 5, "zen", null];
+  const NAMES = { menu: "Menu", 1: "1 Meadow Belt", 2: "2 Frost Reach", 3: "3 Fold Nebula", 4: "4 Clockwork Orrery", 5: "5 Event Horizon", zen: "Zen", null: "Stop (null)" };
+
+  function opts() {
+    return { power: +$("o-power").value, count: +$("o-count").value, k: +$("o-k").value, stars: +$("o-stars").value, n: +$("o-n").value };
+  }
+  function bump(name) {
+    if (!$("o-auto").checked) return;
+    if (name === "plant") $("o-count").value = (+$("o-count").value % 12) + 1;
+    if (name === "pollen") $("o-k").value = (+$("o-k").value + 1) % 12;
+    if (name === "star") $("o-n").value = (+$("o-n").value % 3) + 1;
+  }
+  function fire(name) {
+    A.unlock();
+    A.sfx(name, opts());
+    logLine("sfx " + name + " " + JSON.stringify(opts()));
+    bump(name);
+  }
+  function makeBtns(host, list) {
+    for (const n of list) {
+      const b = document.createElement("button");
+      b.textContent = n;
+      b.onclick = () => fire(n);
+      if (n === "hover") b.onmouseenter = () => { A.unlock(); A.sfx("hover"); };
+      host.appendChild(b);
+    }
+  }
+  makeBtns($("sfx-game"), GAME);
+  makeBtns($("sfx-ui"), UI);
+
+  const mbtns = [];
+  for (const k of KEYS) {
+    const b = document.createElement("button");
+    b.textContent = NAMES[k];
+    b.onclick = () => {
+      A.unlock();
+      A.music(k);
+      mbtns.forEach((x) => x.classList.toggle("on", x === b && k !== null));
+      logLine("music " + k);
+    };
+    mbtns.push(b);
+    $("music").appendChild(b);
+  }
+
+  function syncVol() {
+    const v = A.getVolumes();
+    for (const k of ["master", "music", "sfx"]) { $("v-" + k).value = v[k]; $("o-" + k).textContent = v[k].toFixed(2); }
+  }
+  for (const k of ["master", "music", "sfx"]) {
+    $("v-" + k).oninput = (e) => { A.setVolumes({ [k]: +e.target.value }); syncVol(); };
+  }
+  syncVol();
+  $("o-power").oninput = (e) => { $("o-power-v").textContent = e.target.value; };
+
+  $("unlock").onclick = () => { A.unlock(); };
+  $("mute").onclick = () => { A.setMuted(!A.isMuted()); $("mute").classList.toggle("on", A.isMuted()); $("mute").textContent = A.isMuted() ? "Unmute" : "Mute"; };
+
+  $("burst").onclick = () => {
+    A.unlock();
+    const all = GAME.concat(UI);
+    for (let i = 0; i < 40; i++) setTimeout(() => A.sfx(all[Math.floor(Math.random() * all.length)], { power: Math.random(), count: 1 + i % 10, k: i % 10, n: 1 + i % 3, stars: 3 }), i * 15);
+  };
+  $("plantRun").onclick = () => { A.unlock(); for (let i = 1; i <= 10; i++) setTimeout(() => A.sfx("plant", { count: i }), i * 260); };
+  $("stars").onclick = () => { A.unlock(); for (let i = 1; i <= 3; i++) setTimeout(() => A.sfx("star", { n: i }), i * 420); setTimeout(() => A.sfx("win", { stars: 3 }), 1600); };
+  $("aimDrag").onclick = () => { A.unlock(); for (let i = 0; i < 25; i++) setTimeout(() => A.sfx("aim"), i * 80); };
+
+  let beatTimer = 0;
+  A.onBeat((e) => {
+    const el = $("beat");
+    el.className = e.beat === 0 ? "down" : "hit";
+    $("beatTxt").textContent = e.key + "  bar " + e.bar + "  beat " + e.beat;
+    clearTimeout(beatTimer);
+    beatTimer = setTimeout(() => { el.className = ""; }, 90);
+  });
+
+  setInterval(() => { $("status").textContent = A.isUnlocked() ? "running" : "locked"; }, 300);
+  window.addEventListener("pointerdown", () => A.unlock(), { once: true });
+  window.addEventListener("keydown", () => A.unlock(), { once: true });
+
+  if (/selftest/.test(location.search)) {
+    A.music(2);
+    A.setVolumes({ music: 0.4 });
+    A.unlock();
+    const all = GAME.concat(UI, ["unknown-name", "toString"]);
+    let i = 0;
+    const it = setInterval(() => {
+      A.sfx(all[i % all.length], opts());
+      if (i % 12 === 0) A.music(KEYS[(i / 12) % KEYS.length]);
+      i++;
+    }, 60);
+    setTimeout(() => {
+      clearInterval(it);
+      A.music(null);
+      const r = document.createElement("div");
+      r.id = "selftest";
+      r.textContent = "SELFTEST " + (window.__errs.length ? "FAIL " + window.__errs.join(" | ") : "PASS") + " ctx=" + (A.isUnlocked() ? "running" : "locked") + " sfx=" + i;
+      r.className = window.__errs.length ? "err" : "";
+      document.body.prepend(r);
+      document.title = r.textContent.slice(0, 60);
+      console.log(r.textContent);
+    }, 6000);
+  }
+</script>
+</body>
+</html>

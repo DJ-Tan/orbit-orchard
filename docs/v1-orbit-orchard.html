@@ -1,0 +1,1054 @@
+<title>Orbit Orchard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #10142a;
+    --ink-2: #1b2142;
+    --ink-3: #272e57;
+    --paper: #f4ead8;
+    --paper-dim: #b9b2c9;
+    --peach: #f29e7a;
+    --sage: #8fc79a;
+    --bloom: #ff79b0;
+    --lilac: #a99be6;
+    --butter: #f3d67a;
+    --display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; overflow: hidden; background: var(--ink); color: var(--paper);
+    font-family: var(--body); font-size: 15px; -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+
+  #hud {
+    position: fixed; left: 0; right: 0; top: 0; pointer-events: none;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+  }
+  .hud-left { display: grid; gap: 6px; }
+  .lvl-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--paper-dim); }
+  .lvl-name { font-family: var(--display); font-weight: 600; font-size: clamp(17px, 2.2vw, 24px); letter-spacing: -.01em; }
+  .pods { display: flex; gap: 5px; align-items: center; min-height: 14px; font-family: var(--mono); font-size: 12px; color: var(--paper-dim); }
+  .pod { width: 10px; height: 13px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: var(--peach); box-shadow: 2px 2px 0 #8a4f3d; }
+  .pod.spent { background: transparent; box-shadow: inset 0 0 0 1.5px #5a557a; }
+  .hud-right { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .06em; color: var(--paper);
+    background: color-mix(in srgb, var(--ink-2) 80%, transparent); border: 1.5px solid var(--ink-3);
+    padding: 8px 12px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center;
+    backdrop-filter: blur(6px); transition: border-color .15s, transform .15s;
+  }
+  .btn:hover { border-color: var(--lilac); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--butter); outline-offset: 2px; }
+  .btn kbd { font-family: var(--mono); font-size: 10px; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 4px; padding: 1px 5px; }
+  .btn.primary { background: var(--peach); color: #2a1410; border-color: var(--peach); font-weight: 600; }
+  .btn.primary kbd { color: #5a2c20; border-color: #c8765a; }
+
+  #hint {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    width: min(620px, calc(100% - 32px)); text-align: center; pointer-events: none;
+    font-size: 14px; line-height: 1.45; color: var(--paper-dim); text-wrap: balance;
+    transition: opacity .4s;
+  }
+  #readout { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); font-family: var(--mono); font-size: 12px; color: var(--paper-dim); pointer-events: none; font-variant-numeric: tabular-nums; }
+
+  .overlay {
+    position: fixed; inset: 0; display: grid; place-items: center; padding: 24px 16px;
+    background: radial-gradient(ellipse at 50% 40%, rgba(16,20,42,.55), rgba(10,12,28,.92));
+    overflow-y: auto;
+  }
+  .card { width: min(760px, 100%); display: grid; gap: 22px; }
+  .title {
+    font-family: var(--display); font-weight: 800; line-height: .92; letter-spacing: -.035em;
+    font-size: clamp(44px, 9vw, 96px); margin: 0; text-wrap: balance;
+  }
+  .title .o { color: var(--peach); }
+  .title .g { color: var(--sage); }
+  .tagline { margin: 0; max-width: 56ch; font-size: 16px; line-height: 1.55; color: var(--paper-dim); }
+  .tagline b { color: var(--paper); font-weight: 700; }
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-dim); margin: 0 0 10px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .lvl-btn {
+    text-align: left; display: grid; gap: 4px; padding: 10px 12px; cursor: pointer;
+    background: var(--ink-2); color: var(--paper); border: 1.5px solid var(--ink-3); border-radius: 10px;
+    font-family: var(--body); transition: border-color .15s, transform .15s;
+  }
+  .lvl-btn:hover:not(:disabled) { border-color: var(--sage); transform: translateY(-1px); }
+  .lvl-btn:focus-visible { outline: 2px solid var(--butter); outline-offset: 2px; }
+  .lvl-btn:disabled { opacity: .38; cursor: not-allowed; }
+  .lvl-btn .n { font-family: var(--mono); font-size: 11px; color: var(--paper-dim); letter-spacing: .08em; }
+  .lvl-btn .nm { font-weight: 700; font-size: 14px; }
+  .lvl-btn .st { font-size: 12px; letter-spacing: 2px; color: var(--butter); min-height: 1em; }
+  .lvl-btn.zen { background: linear-gradient(135deg, #22284d, #2d2350); border-color: #3f3a70; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 20px; font-size: 13px; color: var(--paper-dim); }
+  .keys div { display: flex; gap: 10px; align-items: baseline; }
+  .keys kbd { font-family: var(--mono); font-size: 11px; color: var(--paper); border: 1px solid var(--ink-3); background: var(--ink-2); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--paper-dim); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .result { width: min(440px, 100%); text-align: left; background: var(--ink-2); border: 1.5px solid var(--ink-3); border-radius: 18px; padding: 28px; display: grid; gap: 16px; box-shadow: 8px 8px 0 rgba(0,0,0,.35); }
+  .result h2 { font-family: var(--display); font-weight: 800; font-size: 40px; margin: 0; letter-spacing: -.03em; line-height: 1; }
+  .result .stars { font-size: 34px; letter-spacing: 6px; color: var(--butter); }
+  .result .stars .off { color: #3b3f66; }
+  .result p { margin: 0; color: var(--paper-dim); line-height: 1.5; font-variant-numeric: tabular-nums; }
+
+  #toast {
+    position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 92px); transform: translate(-50%, -8px);
+    font-family: var(--mono); font-size: 13px; letter-spacing: .04em; padding: 8px 14px; border-radius: 999px;
+    background: var(--ink-2); border: 1.5px solid var(--ink-3); opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 560px) {
+    .btn .lbl { display: none; }
+    .btn kbd { display: none; }
+    #readout { display: none; }
+    .result h2 { font-size: 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .lvl-btn, #toast { transition: none; }
+  }
+</style>
+
+<canvas id="stage" aria-label="Orbit Orchard play field"></canvas>
+
+<div id="hud">
+  <div class="hud-left">
+    <div class="lvl-eyebrow" id="lvlEyebrow">Plot I of XII</div>
+    <div class="lvl-name" id="lvlName">First Sprout</div>
+    <div class="pods" id="pods"></div>
+  </div>
+  <div class="hud-right">
+    <button class="btn" id="btnMenu" type="button"><span class="lbl">Plots</span><kbd>Esc</kbd></button>
+    <button class="btn" id="btnRestart" type="button"><span class="lbl">Replant</span><kbd>R</kbd></button>
+    <button class="btn" id="btnSound" type="button"><span class="lbl" id="soundLbl">Sound on</span><kbd>M</kbd></button>
+  </div>
+</div>
+<div id="hint"></div>
+<div id="readout"></div>
+<div id="toast"></div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <h1 class="title"><span class="o">Orbit</span><br><span class="g">Orchard</span></h1>
+    <p class="tagline">Sling seeds through gravity wells and plant a garden on every <b>ringed planet</b>. Suns scorch, grey rock is barren, ice deflects, and violet rings fold space. Fewer seeds earn more stars.</p>
+    <div>
+      <p class="section-label">Plots</p>
+      <div class="levels" id="levelGrid"></div>
+    </div>
+    <div>
+      <p class="section-label">Field guide</p>
+      <div class="legend">
+        <span><i style="background:#8fc79a"></i>Soil, plant here</span>
+        <span><i style="background:#5b5f82"></i>Barren rock</span>
+        <span><i style="background:#f6b56f"></i>Sun, burns seeds</span>
+        <span><i style="background:#bfe6f0"></i>Ice, seeds bounce</span>
+        <span><i style="background:transparent;box-shadow:inset 0 0 0 3px #a99be6"></i>Fold, a two-way portal</span>
+      </div>
+    </div>
+    <div>
+      <p class="section-label">Controls</p>
+      <div class="keys">
+        <div><kbd>Drag</kbd> pull back anywhere, release to sow</div>
+        <div><kbd>← →</kbd> aim <kbd>↑ ↓</kbd> power</div>
+        <div><kbd>Shift</kbd> fine aim with arrows</div>
+        <div><kbd>Space</kbd> sow a seed</div>
+        <div><kbd>F</kbd> hold to fast-forward</div>
+        <div><kbd>G</kbd> gravity lattice on/off</div>
+        <div><kbd>R</kbd> replant <kbd>N</kbd> next plot</div>
+        <div><kbd>M</kbd> sound <kbd>Esc</kbd> this menu</div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btnPlay" type="button">Start sowing <kbd>Enter</kbd></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="resultOv" hidden>
+  <div class="result">
+    <div class="lvl-eyebrow" id="resEyebrow">Plot I</div>
+    <h2 id="resTitle">In bloom</h2>
+    <div class="stars" id="resStars"></div>
+    <p id="resText"></p>
+    <div class="row">
+      <button class="btn primary" id="resPrimary" type="button">Next plot <kbd>N</kbd></button>
+      <button class="btn" id="resRetry" type="button">Replant <kbd>R</kbd></button>
+      <button class="btn" id="resMenu" type="button">Plots</button>
+    </div>
+  </div>
+</div>
+
+<script id="sim">
+const WORLD = { w: 1600, h: 1000 };
+const SEED_R = 6, MAX_SPEED = 820, FLIGHT_MAX = 14, PORTAL_R = 26, DT = 1 / 120;
+const DENS = { fertile: 1400, barren: 1500, sun: 3600, ice: 1100 };
+
+const LEVELS = [
+  { name: "First Sprout", seeds: 3, par: 1, preview: 1.6, launch: [220, 560],
+    hint: "Drag anywhere to pull back, then let go to sow. Or aim with the arrow keys and press Space.",
+    bodies: [{ kind: "fertile", x: 1150, y: 480, r: 80 }] },
+  { name: "Around the Bend", seeds: 3, par: 1, preview: 1.3, launch: [200, 500],
+    hint: "Grey rock is barren, but its pull still bends your path.",
+    bodies: [{ kind: "barren", x: 780, y: 500, r: 110 }, { kind: "fertile", x: 1330, y: 520, r: 70 }] },
+  { name: "Twin Plots", seeds: 4, par: 2, preview: 1.3, launch: [200, 500],
+    hint: "Every ringed planet needs a seed before the plot is done.",
+    bodies: [{ kind: "fertile", x: 1050, y: 250, r: 65 }, { kind: "fertile", x: 1050, y: 760, r: 65 }, { kind: "barren", x: 1400, y: 500, r: 60 }] },
+  { name: "Sunward", seeds: 4, par: 2, preview: 1.3, launch: [200, 820],
+    hint: "Suns scorch seeds on contact. Use their pull without touching them.",
+    bodies: [{ kind: "sun", x: 800, y: 450, r: 75 }, { kind: "fertile", x: 1380, y: 260, r: 60 }, { kind: "fertile", x: 560, y: 120, r: 45 }] },
+  { name: "Frost Bank", seeds: 4, par: 1, preview: 1.2, launch: [200, 250],
+    hint: "Ice is slick. Seeds glance off it like a cue ball.",
+    bodies: [{ kind: "ice", x: 650, y: 820, r: 90 }, { kind: "barren", x: 950, y: 300, r: 170 }, { kind: "fertile", x: 1400, y: 440, r: 65 }] },
+  { name: "Moonrise", seeds: 4, par: 1, preview: 1.3, launch: [200, 500],
+    hint: "Moons keep moving while you aim. The dotted path shows where they will be.",
+    bodies: [{ kind: "barren", x: 1000, y: 500, r: 100 }, { kind: "fertile", r: 38, orbit: { p: 0, R: 230, w: 0.6, ph: 0 } }] },
+  { name: "The Fold", seeds: 4, par: 1, preview: 1.2, launch: [180, 780],
+    hint: "Violet rings are joined. Fly into one and you come out of the other, same speed, same heading.",
+    bodies: [{ kind: "barren", x: 800, y: 170, r: 130 }, { kind: "barren", x: 820, y: 520, r: 125 }, { kind: "barren", x: 800, y: 880, r: 120 },
+             { kind: "fertile", x: 1400, y: 640, r: 60 }],
+    portals: [{ a: [420, 330], b: [1130, 330] }] },
+  { name: "Hungry Soil", seeds: 5, par: 3, preview: 1.3, launch: [220, 500],
+    hint: "Some soil is hungry. The pips around the ring count how many seeds it wants.",
+    bodies: [{ kind: "fertile", x: 1100, y: 500, r: 110, need: 3 }, { kind: "barren", r: 30, orbit: { p: 0, R: 210, w: 0.9, ph: 3 } }] },
+  { name: "Binary", seeds: 5, par: 2, preview: 1.2, launch: [180, 500],
+    hint: "Two suns in a waltz. Thread the gap or swing wide.",
+    bodies: [{ kind: "sun", r: 45, dens: 3000, orbit: { cx: 800, cy: 500, R: 110, w: 0.7, ph: 0 } },
+             { kind: "sun", r: 45, dens: 3000, orbit: { cx: 800, cy: 500, R: 110, w: 0.7, ph: Math.PI } },
+             { kind: "fertile", x: 1400, y: 200, r: 50 }, { kind: "fertile", x: 1400, y: 800, r: 50 }] },
+  { name: "Orrery", seeds: 6, par: 2, preview: 1.2, launch: [150, 850],
+    hint: "Two moons of soil ride around a sun. Time each throw.",
+    bodies: [{ kind: "sun", x: 900, y: 500, r: 60, dens: 3000 },
+             { kind: "fertile", r: 30, orbit: { p: 0, R: 200, w: 0.5, ph: 0 } },
+             { kind: "fertile", r: 34, orbit: { p: 0, R: 320, w: -0.35, ph: 2 } },
+             { kind: "barren", r: 40, orbit: { p: 0, R: 430, w: 0.25, ph: 4 } }] },
+  { name: "Short Sight", seeds: 5, par: 2, preview: 0.35, launch: [200, 160],
+    hint: "Your sightline is short here. Trust your gut.",
+    bodies: [{ kind: "barren", x: 600, y: 420, r: 90 }, { kind: "ice", x: 1000, y: 200, r: 70 }, { kind: "barren", x: 1050, y: 700, r: 100 },
+             { kind: "fertile", x: 1420, y: 520, r: 55 }, { kind: "fertile", x: 560, y: 850, r: 50 }],
+    portals: [{ a: [1330, 110], b: [260, 640] }] },
+  { name: "Full Bloom", seeds: 8, par: 4, preview: 1.2, launch: [800, 930],
+    hint: "Everything at once. Good luck, gardener.",
+    bodies: [{ kind: "sun", x: 800, y: 430, r: 70, dens: 3200 },
+             { kind: "fertile", r: 34, orbit: { p: 0, R: 230, w: 0.45, ph: 1 } },
+             { kind: "fertile", x: 220, y: 200, r: 60 }, { kind: "fertile", x: 1380, y: 200, r: 60 },
+             { kind: "ice", x: 1450, y: 720, r: 60 }, { kind: "fertile", x: 150, y: 660, r: 50 }] },
+];
+
+function massOf(b) { return b.r * b.r * (b.dens || DENS[b.kind]); }
+
+function bodyPos(bodies, i, T) {
+  const b = bodies[i];
+  if (!b.orbit) return [b.x, b.y];
+  const o = b.orbit;
+  const c = o.p != null ? bodyPos(bodies, o.p, T) : [o.cx, o.cy];
+  const a = o.ph + o.w * T;
+  return [c[0] + Math.cos(a) * o.R, c[1] + Math.sin(a) * o.R];
+}
+
+function positions(bodies, T) { return bodies.map((_, i) => bodyPos(bodies, i, T)); }
+
+function stepSeed(lv, s, T, dt) {
+  const B = lv.bodies, P = positions(B, T);
+  let ax = 0, ay = 0;
+  for (let i = 0; i < B.length; i++) {
+    const dx = P[i][0] - s.x, dy = P[i][1] - s.y;
+    const d2 = dx * dx + dy * dy, d = Math.sqrt(d2) || 1;
+    const a = massOf(B[i]) / (d2 + 400);
+    ax += a * dx / d; ay += a * dy / d;
+  }
+  s.vx += ax * dt; s.vy += ay * dt;
+  s.x += s.vx * dt; s.y += s.vy * dt;
+  s.t += dt;
+  if (s.cool > 0) s.cool -= dt;
+  for (let i = 0; i < B.length; i++) {
+    const b = B[i], dx = s.x - P[i][0], dy = s.y - P[i][1], d = Math.hypot(dx, dy);
+    if (d < b.r + SEED_R) {
+      const nx = dx / d, ny = dy / d;
+      if (b.kind === "ice") {
+        const vn = s.vx * nx + s.vy * ny;
+        if (vn < 0) { s.vx -= 1.85 * vn * nx; s.vy -= 1.85 * vn * ny; }
+        s.x = P[i][0] + nx * (b.r + SEED_R + 0.5); s.y = P[i][1] + ny * (b.r + SEED_R + 0.5);
+        return { type: "bounce", i, x: s.x, y: s.y };
+      }
+      const type = b.kind === "fertile" ? "plant" : b.kind === "sun" ? "burn" : "crash";
+      return { type, i, ang: Math.atan2(dy, dx), x: s.x, y: s.y };
+    }
+  }
+  if (s.cool <= 0 && lv.portals) {
+    for (const p of lv.portals) {
+      for (const [from, to] of [[p.a, p.b], [p.b, p.a]]) {
+        if (Math.hypot(s.x - from[0], s.y - from[1]) < PORTAL_R) {
+          s.x = to[0]; s.y = to[1]; s.cool = 0.5;
+          return { type: "warp", from, to };
+        }
+      }
+    }
+  }
+  if (s.x < -400 || s.x > WORLD.w + 400 || s.y < -400 || s.y > WORLD.h + 400 || s.t > FLIGHT_MAX) return { type: "lost" };
+  return null;
+}
+</script>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const canvas = $("stage"), ctx = canvas.getContext("2d");
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+const COL = {
+  sage: "#8fc79a", sageDark: "#4f7f63", sageDeep: "#3b624d", barren: "#5b5f82", barrenDark: "#3a3d5c", crater: "#4a4d6e",
+  sun: "#f6b56f", sunCore: "#ffe29a", sunDark: "#b0563e", ice: "#bfe6f0", iceDark: "#6e9fb3",
+  bloom: "#ff79b0", peach: "#f29e7a", butter: "#f3d67a", lilac: "#a99be6", paper: "#f4ead8", stem: "#6fb487",
+};
+const PETALS = ["#ff79b0", "#f29e7a", "#f3d67a", "#ffffff", "#c9a8ff"];
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let stars = {};
+try { stars = JSON.parse(localStorage.getItem("orbit-orchard-stars") || "{}") || {}; } catch (e) { stars = {}; }
+function saveStars() { try { localStorage.setItem("orbit-orchard-stars", JSON.stringify(stars)); } catch (e) {} }
+
+const G = {
+  idx: 0, lv: null, T: 0, seedsLeft: 0, used: 0, seed: null, trail: [], particles: [], rings: [],
+  aim: { ang: -0.25, pow: 0.55 }, drag: null, state: "menu", endTimer: -1, showGrid: true,
+  keys: new Set(), zenSeed: 1, time: 0,
+};
+
+/* ---------- audio ---------- */
+let AC = null, master = null, muted = false;
+function audio() {
+  if (!AC) {
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      master = AC.createGain(); master.gain.value = muted ? 0 : 0.45; master.connect(AC.destination);
+    } catch (e) { AC = null; }
+  }
+  if (AC && AC.state === "suspended") AC.resume();
+}
+function tone(freq, dur, type = "sine", vol = 0.3, slideTo = null, delay = 0) {
+  if (!AC || muted) return;
+  const t0 = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function noise(dur, vol, type, f0, f1) {
+  if (!AC || muted) return;
+  const t0 = AC.currentTime, len = Math.floor(AC.sampleRate * dur);
+  const buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = buf; f.type = type; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t0);
+}
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+const note = (n) => 293.66 * Math.pow(2, n / 12);
+const sfx = {
+  launch: () => noise(0.35, 0.25, "bandpass", 300, 2400),
+  plant: (k) => { for (let j = 0; j < 3; j++) tone(note(PENTA[(k + j * 2) % PENTA.length]), 0.9, "triangle", 0.22, null, j * 0.07); },
+  crash: () => { tone(110, 0.4, "sine", 0.4, 45); noise(0.25, 0.2, "lowpass", 900, 120); },
+  burn: () => { noise(0.6, 0.25, "highpass", 1500, 5000); tone(220, 0.3, "sawtooth", 0.06, 80); },
+  bounce: () => tone(1320, 0.18, "triangle", 0.18, 1760),
+  warp: () => { tone(300, 0.35, "sine", 0.22, 1200); tone(450, 0.35, "sine", 0.12, 1800, 0.05); },
+  lost: () => tone(330, 0.5, "sine", 0.12, 160),
+  win: () => [0, 4, 7, 12, 16].forEach((n, i) => tone(note(n + 5), 1.4, "triangle", 0.2, null, i * 0.11)),
+  fail: () => [7, 4, 0].forEach((n, i) => tone(note(n - 5), 0.8, "sine", 0.2, null, i * 0.16)),
+};
+
+/* ---------- level setup ---------- */
+function prepLevel(def) {
+  const lv = JSON.parse(JSON.stringify(def));
+  lv.seeds = def.seeds;
+  lv.bodies.forEach((b, i) => {
+    b.got = 0; b.need = b.kind === "fertile" ? (b.need || 1) : 0; b.plants = [];
+    const rnd = mulberry32(i * 977 + b.r * 13 + 7);
+    b.spots = Array.from({ length: Math.round(b.r / 7) }, () => {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * b.r * 0.8;
+      return [Math.cos(a) * d, Math.sin(a) * d, 2 + rnd() * b.r * 0.12];
+    });
+    b.phase = rnd() * 10;
+  });
+  return lv;
+}
+
+function zenLevel(seed) {
+  const rnd = mulberry32(seed * 7919 + 3);
+  const launch = [170, 250 + rnd() * 500];
+  const bodies = [], kinds = ["fertile", "fertile", "barren", "sun", "ice", "fertile", "barren"];
+  let tries = 0;
+  while (bodies.length < 5 + Math.floor(rnd() * 2) && tries++ < 400) {
+    const kind = bodies.length < 2 ? "fertile" : kinds[Math.floor(rnd() * kinds.length)];
+    const r = kind === "sun" ? 50 + rnd() * 30 : 38 + rnd() * 55;
+    const x = 480 + rnd() * 1020, y = 110 + rnd() * 780;
+    if (Math.hypot(x - launch[0], y - launch[1]) < r + 260) continue;
+    if (bodies.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + r + 90)) continue;
+    bodies.push({ kind, x, y, r: Math.round(r) });
+  }
+  const host = bodies.find((b) => b.kind !== "fertile");
+  if (host && rnd() < 0.6) {
+    bodies.push({ kind: "fertile", r: 28, orbit: { p: bodies.indexOf(host), R: host.r + 90, w: (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.4), ph: rnd() * 6 } });
+  }
+  const portals = rnd() < 0.4 ? [{ a: [400 + rnd() * 200, 120 + rnd() * 100], b: [1300 + rnd() * 150, 820 + rnd() * 80] }] : [];
+  return { name: "Zen Garden", zen: true, seeds: Infinity, par: 0, preview: 1.6, launch, bodies, portals,
+    hint: "No seed limit, no score. Press N for a fresh patch of sky." };
+}
+
+function loadLevel(idx) {
+  G.idx = idx;
+  const def = idx === -1 ? zenLevel(G.zenSeed) : LEVELS[idx];
+  G.lv = prepLevel(def);
+  G.T = 0; G.seedsLeft = def.seeds; G.used = 0; G.seed = null; G.trail = []; G.particles = []; G.rings = [];
+  G.endTimer = -1; G.state = "play";
+  const l = G.lv.launch;
+  const target = G.lv.bodies.find((b) => b.kind === "fertile" && !b.orbit) || { x: 1200, y: 500 };
+  G.aim.ang = Math.atan2(target.y - l[1], target.x - l[0]);
+  G.aim.pow = 0.55;
+  $("resultOv").hidden = true; $("menu").hidden = true;
+  $("lvlEyebrow").textContent = idx === -1 ? `Sky no. ${G.zenSeed}` : `Plot ${ROMAN[idx]} of ${ROMAN[LEVELS.length - 1]}`;
+  $("lvlName").textContent = def.name;
+  $("hint").textContent = def.hint;
+  $("hint").style.opacity = 1;
+  updatePods();
+}
+
+function updatePods() {
+  const el = $("pods");
+  el.innerHTML = "";
+  if (G.lv.zen) { el.textContent = `${G.used} seeds sown`; return; }
+  for (let i = 0; i < G.lv.seeds; i++) {
+    const p = document.createElement("span");
+    p.className = "pod" + (i >= G.seedsLeft ? " spent" : "");
+    el.appendChild(p);
+  }
+  const s = document.createElement("span");
+  s.textContent = ` par ${G.lv.par}`;
+  el.appendChild(s);
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove("show"), 1600);
+}
+
+/* ---------- plants ---------- */
+function makePlant(r, seed) {
+  const rnd = mulberry32(seed), segs = [], tips = [], leaves = [];
+  const maxD = 3 + Math.floor(rnd() * 2) + (r > 60 ? 1 : 0);
+  function br(x, y, ang, len, d) {
+    const x2 = x + Math.sin(ang) * len, y2 = y - Math.cos(ang) * len;
+    segs.push({ x, y, x2, y2, d, w: Math.max(1, (maxD - d + 1) * 1.1) });
+    if (d > 0 && d < maxD && rnd() < 0.6) leaves.push({ x: (x + x2) / 2, y: (y + y2) / 2, a: ang + (rnd() < 0.5 ? 1 : -1) * 0.9, d, s: 3 + rnd() * 3 });
+    if (d >= maxD) { tips.push({ x: x2, y: y2, d, c: PETALS[Math.floor(rnd() * PETALS.length)], s: 3 + rnd() * 3, rot: rnd() * 6 }); return; }
+    const n = d === 0 ? 2 : rnd() < 0.72 ? 2 : 3;
+    for (let i = 0; i < n; i++) {
+      const spread = (i - (n - 1) / 2) * (0.45 + rnd() * 0.35);
+      br(x2, y2, ang + spread + (rnd() - 0.5) * 0.3, len * (0.64 + rnd() * 0.16), d + 1);
+    }
+  }
+  br(0, 0, (rnd() - 0.5) * 0.3, r * 0.28 + 12, 0);
+  return { segs, tips, leaves, maxD, g: 0, seed };
+}
+
+/* ---------- gameplay ---------- */
+function launch() {
+  if (G.state !== "play" || G.seed || G.seedsLeft <= 0) return;
+  audio();
+  const [lx, ly] = G.lv.launch, sp = G.aim.pow * MAX_SPEED;
+  G.seed = { x: lx, y: ly, vx: Math.cos(G.aim.ang) * sp, vy: Math.sin(G.aim.ang) * sp, t: 0, cool: 0 };
+  G.trail = [];
+  if (G.seedsLeft !== Infinity) G.seedsLeft--;
+  G.used++;
+  updatePods();
+  sfx.launch();
+  $("hint").style.opacity = 0.35;
+}
+
+function burst(x, y, n, colors, speed, life, size = 3) {
+  if (reduceMotion) n = Math.ceil(n / 3);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = speed * (0.3 + Math.random() * 0.7);
+    G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life, c: colors[i % colors.length], s: size * (0.5 + Math.random()) });
+  }
+}
+
+function handleEvent(ev) {
+  const B = G.lv.bodies;
+  if (ev.type === "bounce") { sfx.bounce(); burst(ev.x, ev.y, 10, ["#ffffff", COL.ice], 160, 0.4, 2); G.rings.push({ x: ev.x, y: ev.y, t: 0, c: COL.ice }); return; }
+  if (ev.type === "warp") {
+    sfx.warp();
+    burst(ev.from[0], ev.from[1], 16, [COL.lilac, "#ffffff"], 200, 0.5, 2);
+    burst(ev.to[0], ev.to[1], 16, [COL.lilac, "#ffffff"], 200, 0.5, 2);
+    G.rings.push({ x: ev.to[0], y: ev.to[1], t: 0, c: COL.lilac });
+    G.trail.push(null);
+    return;
+  }
+  G.seed = null;
+  if (ev.type === "plant") {
+    const b = B[ev.i];
+    b.got++;
+    const p = makePlant(b.r, (Math.random() * 1e9) | 0);
+    p.ang = ev.ang;
+    b.plants.push(p);
+    const total = B.reduce((s, x) => s + x.plants.length, 0);
+    sfx.plant(total);
+    burst(ev.x, ev.y, 22, PETALS, 180, 0.9, 3);
+    G.rings.push({ x: ev.x, y: ev.y, t: 0, c: COL.bloom });
+    if (b.got === b.need) toast(b.need > 1 ? "Soil sated" : "Sown");
+  } else if (ev.type === "burn") {
+    sfx.burn(); burst(ev.x, ev.y, 26, [COL.sunCore, COL.peach, "#ffffff"], 260, 0.7, 2.5); toast("Scorched");
+  } else if (ev.type === "crash") {
+    sfx.crash(); burst(ev.x, ev.y, 18, [COL.barren, "#8d90b5", COL.paper], 150, 0.8, 3); toast("Barren rock");
+  } else if (ev.type === "lost") {
+    sfx.lost(); toast("Drifted into the dark");
+  }
+  checkEnd();
+}
+
+function allSown() { return G.lv.bodies.every((b) => b.got >= b.need); }
+
+function checkEnd() {
+  if (allSown()) {
+    if (G.lv.zen) { toast("Garden complete. Press N for a new sky"); sfx.win(); return; }
+    G.state = "ending"; G.endTimer = 1.6; G.endKind = "win";
+  } else if (G.seedsLeft <= 0) {
+    G.state = "ending"; G.endTimer = 1.0; G.endKind = "lose";
+  }
+}
+
+function showResult(kind) {
+  G.state = "result";
+  const idx = G.idx, lv = G.lv;
+  $("resEyebrow").textContent = `Plot ${ROMAN[idx]} · ${lv.name}`;
+  if (kind === "win") {
+    const s = G.used <= lv.par ? 3 : G.used <= lv.par + 1 ? 2 : 1;
+    stars[idx] = Math.max(stars[idx] || 0, s); saveStars();
+    $("resTitle").textContent = s === 3 ? "Full bloom" : "In bloom";
+    $("resStars").innerHTML = "★".repeat(s) + `<span class="off">${"★".repeat(3 - s)}</span>`;
+    $("resText").textContent = `${G.used} ${G.used === 1 ? "seed" : "seeds"} sown, par is ${lv.par}.` +
+      (s < 3 ? ` Match par for three stars.` : ` A perfect planting.`);
+    const last = idx >= LEVELS.length - 1;
+    $("resPrimary").innerHTML = last ? "Enter Zen Garden <kbd>N</kbd>" : "Next plot <kbd>N</kbd>";
+    $("resPrimary").onclick = () => nextLevel();
+    sfx.win();
+  } else {
+    const sown = lv.bodies.filter((b) => b.kind === "fertile" && b.got >= b.need).length;
+    const total = lv.bodies.filter((b) => b.kind === "fertile").length;
+    $("resTitle").textContent = "Out of seeds";
+    $("resStars").innerHTML = `<span class="off">★★★</span>`;
+    $("resText").textContent = `${sown} of ${total} ${total === 1 ? "plot" : "plots"} planted. Replant and try a different line.`;
+    $("resPrimary").innerHTML = "Replant <kbd>R</kbd>";
+    $("resPrimary").onclick = () => loadLevel(G.idx);
+    sfx.fail();
+  }
+  $("resultOv").hidden = false;
+  $("resPrimary").focus({ preventScroll: true });
+}
+
+function nextLevel() {
+  audio();
+  if (G.idx === -1) { G.zenSeed++; loadLevel(-1); return; }
+  if (G.idx >= LEVELS.length - 1) { G.zenSeed = 1 + Math.floor(Math.random() * 999); loadLevel(-1); return; }
+  loadLevel(G.idx + 1);
+}
+
+function unlocked(i) { return i === 0 || stars[i - 1] > 0 || stars[i] > 0; }
+
+function openMenu() {
+  const grid = $("levelGrid");
+  grid.innerHTML = "";
+  LEVELS.forEach((l, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "lvl-btn"; b.disabled = !unlocked(i);
+    const s = stars[i] || 0;
+    b.innerHTML = `<span class="n">${ROMAN[i]}</span><span class="nm">${l.name}</span><span class="st">${"★".repeat(s)}${"☆".repeat(s ? 3 - s : 0)}</span>`;
+    b.onclick = () => { audio(); loadLevel(i); };
+    grid.appendChild(b);
+  });
+  const z = document.createElement("button");
+  z.type = "button"; z.className = "lvl-btn zen";
+  z.innerHTML = `<span class="n">∞</span><span class="nm">Zen Garden</span><span class="st" style="color:var(--lilac)">endless skies</span>`;
+  z.onclick = () => { audio(); G.zenSeed = 1 + Math.floor(Math.random() * 999); loadLevel(-1); };
+  grid.appendChild(z);
+  const firstOpen = LEVELS.findIndex((_, i) => unlocked(i) && !stars[i]);
+  $("btnPlay").innerHTML = (firstOpen > 0 ? `Continue at ${ROMAN[firstOpen]}` : Object.keys(stars).length ? "Play" : "Start sowing") + " <kbd>Enter</kbd>";
+  $("btnPlay").onclick = () => { audio(); loadLevel(firstOpen >= 0 ? firstOpen : 0); };
+  $("resultOv").hidden = true;
+  $("menu").hidden = false;
+  G.menuPrev = G.state;
+  G.state = "menu";
+}
+
+/* ---------- view ---------- */
+let W = 0, H = 0, DPR = 1, view = { s: 1, ox: 0, oy: 0 }, bgStars = [], grain = null;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  const padTop = W < 560 ? 90 : 70, padBot = 50;
+  const s = Math.min(W / WORLD.w, (H - padTop - padBot) / WORLD.h);
+  view = { s, ox: (W - WORLD.w * s) / 2, oy: padTop + (H - padTop - padBot - WORLD.h * s) / 2 };
+  const rnd = mulberry32(42);
+  bgStars = Array.from({ length: Math.round((W * H) / 3500) }, () => ({
+    x: rnd() * W, y: rnd() * H, r: rnd() < 0.08 ? 1.6 : 0.4 + rnd() * 0.8, tw: rnd() * 6, d: 0.2 + rnd() * 0.8,
+    c: rnd() < 0.15 ? "#ffd8c2" : rnd() < 0.3 ? "#cfc6ff" : "#f4ead8",
+  }));
+}
+function makeGrain() {
+  const c = document.createElement("canvas"); c.width = c.height = 160;
+  const g = c.getContext("2d"), img = g.createImageData(160, 160);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.random() * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 22;
+  }
+  g.putImageData(img, 0, 0);
+  grain = ctx.createPattern(c, "repeat");
+}
+const toWorld = (px, py) => [(px - view.ox) / view.s, (py - view.oy) / view.s];
+
+/* ---------- input ---------- */
+canvas.addEventListener("pointerdown", (e) => {
+  audio();
+  if (G.state !== "play" || G.seed || G.seedsLeft <= 0) return;
+  canvas.setPointerCapture(e.pointerId);
+  G.drag = { sx: e.clientX, sy: e.clientY, id: e.pointerId, moved: false };
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!G.drag || e.pointerId !== G.drag.id) return;
+  const dx = G.drag.sx - e.clientX, dy = G.drag.sy - e.clientY, len = Math.hypot(dx, dy);
+  if (len < 6) return;
+  G.drag.moved = true;
+  G.aim.ang = Math.atan2(dy, dx);
+  G.aim.pow = clamp(len / Math.min(280, Math.max(160, W * 0.22)), 0.05, 1);
+});
+function endDrag(e) {
+  if (!G.drag || e.pointerId !== G.drag.id) return;
+  const moved = G.drag.moved;
+  G.drag = null;
+  if (moved && G.aim.pow > 0.08) launch();
+}
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", () => { G.drag = null; });
+
+window.addEventListener("keydown", (e) => {
+  const k = e.key;
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(k) && G.state === "play") e.preventDefault();
+  G.keys.add(k.length === 1 ? k.toLowerCase() : k);
+  if (e.repeat) return;
+  if (k === "Escape") {
+    if (G.state === "menu" && G.lv) { $("menu").hidden = true; G.state = G.menuPrev === "result" ? "result" : "play"; if (G.state === "result") $("resultOv").hidden = false; }
+    else openMenu();
+    return;
+  }
+  if (G.state === "menu") {
+    if (k === "Enter" && document.activeElement?.tagName !== "BUTTON") $("btnPlay").click();
+    return;
+  }
+  const lower = k.toLowerCase();
+  if (lower === "m") toggleSound();
+  else if (lower === "g") { G.showGrid = !G.showGrid; toast(G.showGrid ? "Gravity lattice on" : "Gravity lattice off"); }
+  else if (lower === "r") { audio(); loadLevel(G.idx); }
+  else if (lower === "n") {
+    if (G.state === "result" && G.endKind === "lose") return;
+    if (G.idx === -1 || G.state === "result" || stars[G.idx] > 0) nextLevel();
+  } else if ((k === " " || k === "Enter") && G.state === "play") launch();
+  else if (k === "Enter" && G.state === "result" && document.activeElement?.tagName !== "BUTTON") $("resPrimary").click();
+});
+window.addEventListener("keyup", (e) => G.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+window.addEventListener("blur", () => G.keys.clear());
+
+function toggleSound() {
+  muted = !muted;
+  if (master) master.gain.value = muted ? 0 : 0.45;
+  $("soundLbl").textContent = muted ? "Sound off" : "Sound on";
+  if (!muted) { audio(); tone(note(12), 0.3, "triangle", 0.15); }
+}
+$("btnSound").onclick = () => { audio(); toggleSound(); };
+$("btnRestart").onclick = () => { audio(); if (G.lv) loadLevel(G.idx); };
+$("btnMenu").onclick = () => openMenu();
+$("resRetry").onclick = () => loadLevel(G.idx);
+$("resMenu").onclick = () => openMenu();
+
+/* ---------- update ---------- */
+function update(dt) {
+  G.time += dt;
+  if (!G.lv) return;
+  const fast = G.keys.has("f") ? 3 : 1;
+  const sdt = dt * fast;
+
+  if (G.state === "play" && !G.drag) {
+    const fine = G.keys.has("Shift") ? 0.25 : 1;
+    if (G.keys.has("ArrowLeft")) G.aim.ang -= 1.6 * dt * fine;
+    if (G.keys.has("ArrowRight")) G.aim.ang += 1.6 * dt * fine;
+    if (G.keys.has("ArrowUp")) G.aim.pow = clamp(G.aim.pow + 0.5 * dt * fine, 0.05, 1);
+    if (G.keys.has("ArrowDown")) G.aim.pow = clamp(G.aim.pow - 0.5 * dt * fine, 0.05, 1);
+  }
+
+  if (G.state !== "menu") {
+    let acc = sdt;
+    while (acc > 1e-6) {
+      const h = Math.min(DT, acc);
+      acc -= h;
+      G.T += h;
+      if (G.seed) {
+        const ev = stepSeed(G.lv, G.seed, G.T, h);
+        if (G.seed) G.trail.push([G.seed.x, G.seed.y]);
+        if (G.trail.length > 90) G.trail.shift();
+        if (ev) handleEvent(ev);
+      }
+    }
+  }
+
+  for (const b of G.lv.bodies) for (const p of b.plants) p.g = Math.min(1, p.g + sdt / 1.8);
+  for (const p of G.particles) { p.x += p.vx * sdt; p.y += p.vy * sdt; p.vx *= 0.96; p.vy *= 0.96; p.life -= sdt; }
+  G.particles = G.particles.filter((p) => p.life > 0);
+  for (const r of G.rings) r.t += sdt;
+  G.rings = G.rings.filter((r) => r.t < 0.8);
+  if (!G.seed && G.trail.length) G.trail.shift();
+
+  if (G.state === "ending") {
+    G.endTimer -= dt;
+    if (G.endTimer <= 0) showResult(G.endKind);
+  }
+
+  const deg = ((G.aim.ang * 180) / Math.PI + 360) % 360;
+  $("readout").textContent = G.state === "play" ? `aim ${(360 - deg).toFixed(1).padStart(5, " ")}°  power ${Math.round(G.aim.pow * 100).toString().padStart(3, " ")}%${fast > 1 ? "  ×3" : ""}` : "";
+}
+
+/* ---------- draw ---------- */
+function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+
+function drawBackground() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = ctx.createRadialGradient(W * 0.3, H * 0.2, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.9);
+  g.addColorStop(0, "#1d2350"); g.addColorStop(0.55, "#131836"); g.addColorStop(1, "#0b0e20");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const n = ctx.createRadialGradient(W * 0.78, H * 0.75, 0, W * 0.78, H * 0.75, Math.max(W, H) * 0.5);
+  n.addColorStop(0, "rgba(169,155,230,0.10)"); n.addColorStop(1, "rgba(169,155,230,0)");
+  ctx.fillStyle = n; ctx.fillRect(0, 0, W, H);
+  for (const s of bgStars) {
+    const a = reduceMotion ? 0.6 : 0.35 + 0.5 * (0.5 + 0.5 * Math.sin(G.time * (0.6 + s.d) + s.tw));
+    ctx.globalAlpha = a * s.d; ctx.fillStyle = s.c;
+    ctx.fillRect(s.x, s.y, s.r * 1.4, s.r * 1.4);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGrid(P) {
+  if (!G.showGrid) return;
+  const B = G.lv.bodies, step = 50;
+  ctx.fillStyle = "rgba(207,198,255,0.20)";
+  for (let gx = step / 2; gx < WORLD.w; gx += step) {
+    for (let gy = step / 2; gy < WORLD.h; gy += step) {
+      let dx = 0, dy = 0, inside = false;
+      for (let i = 0; i < B.length; i++) {
+        const ex = P[i][0] - gx, ey = P[i][1] - gy, d2 = ex * ex + ey * ey, d = Math.sqrt(d2);
+        if (d < B[i].r + 6) { inside = true; break; }
+        const f = (massOf(B[i]) / (d2 + 2000)) * 0.09;
+        dx += (ex / d) * f; dy += (ey / d) * f;
+      }
+      if (inside) continue;
+      const m = Math.hypot(dx, dy), cap = 22;
+      if (m > cap) { dx *= cap / m; dy *= cap / m; }
+      const sz = 1.2 + Math.min(m, cap) / cap * 1.2;
+      ctx.fillRect(gx + dx - sz / 2, gy + dy - sz / 2, sz, sz);
+    }
+  }
+}
+
+function drawPortal(x, y, t, k) {
+  ctx.save(); ctx.translate(x, y);
+  const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, PORTAL_R * 2);
+  glow.addColorStop(0, "rgba(169,155,230,0.45)"); glow.addColorStop(1, "rgba(169,155,230,0)");
+  ctx.fillStyle = glow; circle(0, 0, PORTAL_R * 2); ctx.fill();
+  ctx.lineWidth = 3; ctx.lineCap = "round";
+  for (let i = 0; i < 3; i++) {
+    ctx.strokeStyle = i === 0 ? COL.lilac : i === 1 ? "#d9d0ff" : "#7d6fc4";
+    const r = PORTAL_R - i * 7, a = t * (1.5 + i * 0.7) * (k ? -1 : 1) + i;
+    ctx.beginPath(); ctx.arc(0, 0, r, a, a + Math.PI * 1.3); ctx.stroke();
+  }
+  ctx.fillStyle = "#0b0e20"; circle(0, 0, 6); ctx.fill();
+  ctx.restore();
+}
+
+function drawBody(b, x, y) {
+  const t = G.time, r = b.r;
+  if (b.kind === "sun") {
+    const pulse = reduceMotion ? 0 : Math.sin(t * 2 + b.phase) * 4;
+    const glow = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 2.6 + pulse);
+    glow.addColorStop(0, "rgba(246,181,111,0.45)"); glow.addColorStop(1, "rgba(246,181,111,0)");
+    ctx.fillStyle = glow; circle(x, y, r * 2.6 + pulse); ctx.fill();
+    ctx.strokeStyle = "rgba(255,226,154,0.55)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + t * 0.2, l = r + 8 + Math.sin(t * 3 + i * 1.7) * 5 + 6;
+      ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (r + 5), y + Math.sin(a) * (r + 5)); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke();
+    }
+    ctx.fillStyle = COL.sunDark; circle(x + 5, y + 5, r); ctx.fill();
+    const core = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    core.addColorStop(0, COL.sunCore); core.addColorStop(1, COL.sun);
+    ctx.fillStyle = core; circle(x, y, r); ctx.fill();
+    return;
+  }
+  const base = b.kind === "fertile" ? (b.got >= b.need ? "#9fd6a6" : COL.sage) : b.kind === "ice" ? COL.ice : COL.barren;
+  const dark = b.kind === "fertile" ? COL.sageDark : b.kind === "ice" ? COL.iceDark : COL.barrenDark;
+  ctx.fillStyle = dark; circle(x + 6, y + 6, r); ctx.fill();
+  ctx.fillStyle = base; circle(x, y, r); ctx.fill();
+  ctx.save(); circle(x, y, r); ctx.clip();
+  if (b.kind === "fertile") {
+    ctx.fillStyle = COL.sageDeep; ctx.globalAlpha = 0.35;
+    for (const [sx, sy, sr] of b.spots) { circle(x + sx, y + sy, sr * 0.6); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  } else if (b.kind === "barren") {
+    for (const [sx, sy, sr] of b.spots) {
+      ctx.fillStyle = COL.crater; circle(x + sx, y + sy, sr); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; circle(x + sx - sr * 0.25, y + sy - sr * 0.25, sr * 0.55); ctx.fill();
+    }
+  } else if (b.kind === "ice") {
+    ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.5;
+    for (let i = 0; i < b.spots.length; i += 2) {
+      const [sx, sy] = b.spots[i], [ex, ey] = b.spots[(i + 1) % b.spots.length];
+      ctx.beginPath(); ctx.moveTo(x + sx, y + sy); ctx.lineTo(x + ex, y + ey); ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; circle(x - r * 0.35, y - r * 0.4, r * 0.28); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(16,20,42,0.22)"; circle(x + r * 0.35, y + r * 0.35, r * 0.95); ctx.fill();
+  ctx.restore();
+
+  if (b.kind === "fertile") {
+    const sated = b.got >= b.need, rr = r + 16;
+    ctx.save(); ctx.translate(x, y);
+    ctx.lineWidth = 2;
+    if (sated) {
+      ctx.strokeStyle = "rgba(255,121,176,0.55)";
+      circle(0, 0, rr); ctx.stroke();
+    } else {
+      ctx.rotate(reduceMotion ? 0 : t * 0.3);
+      ctx.setLineDash([6, 8]);
+      ctx.strokeStyle = `rgba(143,199,154,${0.55 + 0.3 * Math.sin(t * 3 + b.phase)})`;
+      circle(0, 0, rr); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.rotate(reduceMotion ? 0 : -t * 0.3);
+    }
+    if (b.need > 1) {
+      for (let i = 0; i < b.need; i++) {
+        const a = -Math.PI / 2 + (i - (b.need - 1) / 2) * 0.28;
+        ctx.fillStyle = i < b.got ? COL.bloom : "#0f1328";
+        ctx.strokeStyle = COL.bloom; ctx.lineWidth = 1.5;
+        circle(Math.cos(a) * (rr + 10), Math.sin(a) * (rr + 10), 5); ctx.fill(); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+function drawPlant(b, x, y, p) {
+  const prog = p.g * (p.maxD + 2.2);
+  ctx.save();
+  ctx.translate(x + Math.cos(p.ang) * (b.r - 2), y + Math.sin(p.ang) * (b.r - 2));
+  ctx.rotate(p.ang + Math.PI / 2 + (reduceMotion ? 0 : Math.sin(G.time * 1.3 + p.seed) * 0.05));
+  ctx.lineCap = "round";
+  for (const s of p.segs) {
+    const f = clamp(prog - s.d, 0, 1);
+    if (f <= 0) continue;
+    ctx.strokeStyle = s.d < 2 ? "#5d9c73" : COL.stem; ctx.lineWidth = s.w;
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + (s.x2 - s.x) * f, s.y + (s.y2 - s.y) * f); ctx.stroke();
+  }
+  for (const l of p.leaves) {
+    const f = clamp(prog - l.d - 0.6, 0, 1);
+    if (f <= 0) continue;
+    ctx.fillStyle = "#9fd6a6";
+    ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.a);
+    ctx.beginPath(); ctx.ellipse(0, -l.s * f, l.s * 0.45 * f, l.s * f, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  for (const tip of p.tips) {
+    const f = clamp(prog - tip.d - 1, 0, 1);
+    if (f <= 0) continue;
+    const s = tip.s * f;
+    ctx.save(); ctx.translate(tip.x, tip.y); ctx.rotate(tip.rot + G.time * 0.2);
+    ctx.fillStyle = tip.c;
+    for (let i = 0; i < 5; i++) {
+      ctx.rotate((Math.PI * 2) / 5);
+      ctx.beginPath(); ctx.ellipse(0, -s, s * 0.55, s, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#2a1f3d"; circle(0, 0, s * 0.45); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawLauncher() {
+  const [lx, ly] = G.lv.launch, t = G.time;
+  ctx.save(); ctx.translate(lx, ly);
+  ctx.strokeStyle = "rgba(244,234,216,0.16)"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 7]);
+  circle(0, 0, 70); ctx.stroke(); ctx.setLineDash([]);
+  const ready = G.state === "play" && !G.seed && G.seedsLeft > 0;
+  if (ready) {
+    const dirx = Math.cos(G.aim.ang), diry = Math.sin(G.aim.ang), pull = 14 + G.aim.pow * 48;
+    ctx.strokeStyle = "rgba(242,158,122,0.8)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-diry * 16, dirx * 16); ctx.lineTo(-dirx * pull, -diry * pull); ctx.lineTo(diry * 16, -dirx * 16); ctx.stroke();
+    const tipL = 34 + G.aim.pow * 60;
+    ctx.strokeStyle = COL.butter; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(dirx * 22, diry * 22); ctx.lineTo(dirx * tipL, diry * tipL); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(dirx * tipL + Math.cos(G.aim.ang + 2.6) * 10, diry * tipL + Math.sin(G.aim.ang + 2.6) * 10);
+    ctx.lineTo(dirx * tipL, diry * tipL);
+    ctx.lineTo(dirx * tipL + Math.cos(G.aim.ang - 2.6) * 10, diry * tipL + Math.sin(G.aim.ang - 2.6) * 10);
+    ctx.stroke();
+    ctx.save(); ctx.translate(-dirx * pull * 0.6, -diry * pull * 0.6); drawSeedShape(G.aim.ang, 1.4); ctx.restore();
+  }
+  ctx.fillStyle = "#8a4f3d"; ctx.beginPath(); ctx.ellipse(4, 4, 18, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.peach; ctx.beginPath(); ctx.ellipse(0, 0, 18, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#ffc9ae"; ctx.beginPath(); ctx.ellipse(-5, -4, 6, 3.5, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = COL.stem; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+  const sway = reduceMotion ? 0 : Math.sin(t * 2) * 2;
+  ctx.beginPath(); ctx.moveTo(0, -12); ctx.quadraticCurveTo(2, -20, sway + 1, -26); ctx.stroke();
+  ctx.fillStyle = "#9fd6a6"; ctx.beginPath(); ctx.ellipse(sway + 6, -25, 6, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawSeedShape(ang, scale = 1) {
+  ctx.save(); ctx.rotate(ang); ctx.scale(scale, scale);
+  ctx.fillStyle = "#ffe8b0"; ctx.beginPath(); ctx.ellipse(0, 0, 7, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.peach; ctx.beginPath(); ctx.ellipse(-2, 0, 4, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawPreview() {
+  if (G.state !== "play" || G.seed || G.seedsLeft <= 0) return;
+  const [lx, ly] = G.lv.launch, sp = G.aim.pow * MAX_SPEED;
+  const s = { x: lx, y: ly, vx: Math.cos(G.aim.ang) * sp, vy: Math.sin(G.aim.ang) * sp, t: 0, cool: 0 };
+  const steps = Math.round(G.lv.preview / DT);
+  const ghost = { ...G.lv, bodies: G.lv.bodies };
+  let T = G.T;
+  for (let i = 1; i <= steps; i++) {
+    T += DT;
+    const ev = stepSeed(ghost, s, T, DT);
+    if (ev && ev.type === "warp") continue;
+    if (i % 5 === 0 || ev) {
+      const a = 1 - i / steps;
+      ctx.fillStyle = `rgba(243,214,122,${0.15 + a * 0.75})`;
+      circle(s.x, s.y, 1.5 + a * 2); ctx.fill();
+    }
+    if (ev && ev.type !== "bounce") {
+      const c = ev.type === "plant" ? COL.bloom : ev.type === "burn" ? COL.peach : "#8d90b5";
+      ctx.strokeStyle = c; ctx.lineWidth = 2;
+      circle(s.x, s.y, 9); ctx.stroke();
+      break;
+    }
+  }
+  if (G.lv.bodies.some((b) => b.orbit)) {
+    for (let i = 0; i < G.lv.bodies.length; i++) {
+      const b = G.lv.bodies[i];
+      if (!b.orbit) continue;
+      const [gx, gy] = bodyPos(G.lv.bodies, i, G.T + Math.min(G.lv.preview, 1.2));
+      ctx.strokeStyle = "rgba(244,234,216,0.18)"; ctx.setLineDash([4, 6]); ctx.lineWidth = 1.5;
+      circle(gx, gy, b.r); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+}
+
+function drawOrbits(P) {
+  ctx.strokeStyle = "rgba(244,234,216,0.07)"; ctx.lineWidth = 1.5;
+  G.lv.bodies.forEach((b) => {
+    if (!b.orbit) return;
+    const c = b.orbit.p != null ? P[b.orbit.p] : [b.orbit.cx, b.orbit.cy];
+    circle(c[0], c[1], b.orbit.R); ctx.stroke();
+  });
+}
+
+function draw() {
+  drawBackground();
+  if (!G.lv) return;
+  ctx.setTransform(DPR * view.s, 0, 0, DPR * view.s, DPR * view.ox, DPR * view.oy);
+  const P = positions(G.lv.bodies, G.T);
+  drawGrid(P);
+  drawOrbits(P);
+  if (G.lv.portals) {
+    for (const [k, p] of G.lv.portals.entries()) {
+      ctx.strokeStyle = "rgba(169,155,230,0.16)"; ctx.setLineDash([2, 10]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.a[0], p.a[1]); ctx.lineTo(p.b[0], p.b[1]); ctx.stroke(); ctx.setLineDash([]);
+      drawPortal(p.a[0], p.a[1], G.time, 0); drawPortal(p.b[0], p.b[1], G.time, 1);
+    }
+  }
+  G.lv.bodies.forEach((b, i) => drawBody(b, P[i][0], P[i][1]));
+  G.lv.bodies.forEach((b, i) => b.plants.forEach((p) => drawPlant(b, P[i][0], P[i][1], p)));
+  drawPreview();
+  drawLauncher();
+
+  if (G.trail.length > 1) {
+    ctx.lineCap = "round";
+    for (let i = 1; i < G.trail.length; i++) {
+      const a = G.trail[i - 1], b = G.trail[i];
+      if (!a || !b) continue;
+      const f = i / G.trail.length;
+      ctx.strokeStyle = `rgba(242,158,122,${f * 0.7})`; ctx.lineWidth = 1 + f * 4;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+  }
+  if (G.seed) {
+    const s = G.seed;
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 26);
+    glow.addColorStop(0, "rgba(255,232,176,0.55)"); glow.addColorStop(1, "rgba(255,232,176,0)");
+    ctx.fillStyle = glow; circle(s.x, s.y, 26); ctx.fill();
+    ctx.save(); ctx.translate(s.x, s.y); drawSeedShape(Math.atan2(s.vy, s.vx), 1.2); ctx.restore();
+  }
+  for (const r of G.rings) {
+    const f = r.t / 0.8;
+    ctx.strokeStyle = r.c; ctx.globalAlpha = 1 - f; ctx.lineWidth = 3 * (1 - f) + 0.5;
+    circle(r.x, r.y, 10 + f * 60); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  for (const p of G.particles) {
+    ctx.globalAlpha = clamp(p.life / p.max, 0, 1); ctx.fillStyle = p.c;
+    circle(p.x, p.y, p.s); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (grain) { ctx.globalCompositeOperation = "overlay"; ctx.fillStyle = grain; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = "source-over"; }
+}
+
+/* ---------- boot ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+function start(data) {
+  resize(); makeGrain();
+  window.addEventListener("resize", resize);
+  if (data && typeof data.zenSeed === "number") G.zenSeed = data.zenSeed;
+  if (data && typeof data.idx === "number" && data.inPlay) loadLevel(data.idx);
+  else { G.lv = prepLevel(LEVELS[0]); G.state = "menu"; openMenu(); }
+  requestAnimationFrame(frame);
+}
+window.claude?.hot?.snapshot?.(() => ({ idx: G.idx, zenSeed: G.zenSeed, inPlay: G.state !== "menu" }));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>

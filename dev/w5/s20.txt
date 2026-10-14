@@ -1,0 +1,1 @@
+[ok  ] #20 w5-21 Last Light             hardest=0.58%  #3:36 #4:36 #5:74(boost10)

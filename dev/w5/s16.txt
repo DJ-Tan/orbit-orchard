@@ -1,0 +1,1 @@
+[ok  ] #16 w5-17 Quasar                 hardest=0.27%  #1:321(bounce24) #2:17(bounce6) #5:340(bounce3)

@@ -1,0 +1,1 @@
+[ok  ] #4 w5-05 Photon Ring            hardest=1.92%  #1:2227 #2:1434

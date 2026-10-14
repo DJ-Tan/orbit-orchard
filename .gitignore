@@ -1,0 +1,8 @@
+firebase/public/
+firebase/.firebase/
+firebase/*.log
+dev/**/shots/
+dev/web/site/
+dev/web/site-nosdk/
+dev/integ/preview.html
+.claude/settings.local.json

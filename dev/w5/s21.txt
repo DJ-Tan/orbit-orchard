@@ -1,0 +1,1 @@
+[ok  ] #21 w5-22 Accretion Crown        hardest=0.21%  #1:2427(warp161,bounce414) #2:2410(warp133,bounce468) #3:2214(warp123,bounce438) #4:2313(warp93,bounce447) #12:157(warp71,bounce5)
