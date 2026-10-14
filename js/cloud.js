@@ -242,7 +242,8 @@
   function start(opts) {
     const st = { mode: "connecting", reason: "", at: 0, who: null };
     let ref = null, unsub = null, remote, ready = false, busy = false, again = false, againForce = false, timer = 0, retried = false, starting = false, revive = 0;
-    const gap = opts.minGap > 0 ? opts.minGap : 0;
+    const gap = () => { const g = typeof opts.minGap === "function" ? opts.minGap() : opts.minGap; return g > 0 ? g : 0; };
+    const REST = "Cloud sync is resting for today. Progress is saved on this device.";
     let epoch = 0, lastSet = 0;
     const status = (mode, reason) => {
       st.mode = mode; st.reason = reason || "";
@@ -257,7 +258,8 @@
 
     function fail(e) {
       const code = (e && e.code) || "unavailable";
-      if (code === "invalid_argument" || code === "transform_error") stop("readonly", "Your access to this page can't save. Ask the owner for Contributor access.");
+      if (code === "resting") stop("resting", REST);
+      else if (code === "invalid_argument" || code === "transform_error") stop("readonly", "Your access to this page can't save. Ask the owner for Contributor access.");
       else if (code === "quota_exceeded") status("error", "Cloud storage is full.");
       else if (code === "revoked" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed") stop("local", "Cloud save isn't available in this view.");
       else status("offline", "Can't reach the cloud. Progress is safe on this device and will sync later.");
@@ -265,7 +267,8 @@
 
     function onSnapErr(e) {
       const code = (e && e.code) || "unavailable";
-      if (code === "unavailable" || code === "resource_exhausted") {
+      if (code === "resting") stop("resting", REST);
+      else if (code === "unavailable" || code === "resource_exhausted") {
         stop("offline", "Can't reach the cloud. Progress is safe on this device and will sync later.");
         clearTimeout(revive);
         revive = setTimeout(init, 15000 + Math.random() * 15000);
@@ -305,7 +308,7 @@
     /** Schedules one write no sooner than `minGap` after the last one. */
     function pace(now) {
       if (timer) return;
-      timer = setTimeout(() => { timer = 0; push(false); }, Math.max(now ? 0 : 2500, lastSet + gap - Date.now()));
+      timer = setTimeout(() => { timer = 0; push(false); }, Math.max(now ? 0 : 2500, lastSet + gap() - Date.now()));
     }
 
     function absorb(W) {
@@ -327,7 +330,7 @@
       ready = true;
       st.at = st.at || Date.now();
       const M = absorb(W);
-      if (!W || canonWire(M, true) !== canonWire(W, true)) { if (gap) pace(true); else push(false); }
+      if (!W || canonWire(M, true) !== canonWire(W, true)) { if (gap()) pace(true); else push(false); }
       else status("synced");
     }
 
@@ -362,7 +365,7 @@
       status: () => Object.assign({}, st),
       notify(now) {
         if (!ref) return;
-        if (gap) { pace(now); return; }
+        if (gap()) { pace(now); return; }
         clearTimeout(timer);
         timer = setTimeout(() => push(false), now ? 0 : 2500);
       },

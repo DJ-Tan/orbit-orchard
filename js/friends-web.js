@@ -1,19 +1,23 @@
 (function (root) {
   "use strict";
 
-  const CARD_GAP = 900000, FLUSH_GAP = 300000, CT_MAX = 2048, CARD_CT = 4096, PER_SENDER = 70, DROP_MAX = 50, WATCH = 20000, HOUR = 3600000;
-  const LISTEN = { "permission-denied": "not_granted", unauthenticated: "not_granted", "resource-exhausted": "resource_exhausted" };
-  const WRITE = { "permission-denied": "denied", unauthenticated: "denied", "invalid-argument": "denied", "resource-exhausted": "quota_exceeded" };
+  const CARD_GAP = 1800000, FLUSH_GAP = 300000, CT_MAX = 2048, CARD_CT = 4096, PER_SENDER = 70, DROP_MAX = 50, WATCH = 20000, HOUR = 3600000;
+  const LISTEN = { "permission-denied": "not_granted", unauthenticated: "not_granted", "resource-exhausted": "resource_exhausted", resting: "resting" };
+  const WRITE = { "permission-denied": "denied", unauthenticated: "denied", "invalid-argument": "denied", "resource-exhausted": "quota_exceeded", resting: "resting" };
   const ABSENT = {
     off: ["cloud", "Friends are starting", "One moment."],
     local: ["cloudoff", "Friends need the cloud", "Friends load from the cloud. Reload when you're online. Everything else works right here."],
     signedout: ["cloudoff", "Sign in to use Friends", "Sign in with Google to add friends and trade challenges."],
     connecting: ["sync", "Connecting", "Loading your friends and challenges."],
     offline: ["cloudoff", "Can't reach the cloud", "Friends will reconnect on their own. Your garden is safe on this device."],
-    error: ["cloudoff", "Friends aren't available right now", "Something went wrong loading Friends. The rest of the game works as usual."]
+    error: ["cloudoff", "Friends aren't available right now", "Something went wrong loading Friends. The rest of the game works as usual."],
+    get resting() {
+      const M = root.OrchardWeb && root.OrchardWeb.meter;
+      return ["cloudoff", "Friends are resting until " + (M ? M.untilText() : "tomorrow"), (M && M.why() === "full" ? "Cloud sync is full for today." : "Today's cloud allowance is used up.") + " Your garden keeps saving on this device."];
+    }
   };
   const TX = {
-    absent: ABSENT, full: "The cloud is at today's limit. Try again later.", unreach: "Can't reach the cloud right now", gap: " Updates at most every 15 minutes.",
+    absent: ABSENT, full: "The cloud is at today's limit. Try again later.", unreach: "Can't reach the cloud right now", gap: " Updates at most every 30 minutes.",
     empty: "No friends yet. Trade friend codes to follow their garden. Following is one-way, but you see someone's progress only if they follow you too.",
     codeHelp: "Anyone who enters it can follow you. They see your progress only if you follow them too.", noCode: "Make one so friends can add you."
   };
@@ -32,24 +36,20 @@
 
   /** Friends storage on Firestore: per-reader card docs, friend-code docs, public keys and a challenge inbox. */
   root.OrchardFriendsWeb = function (K) {
-    const F = K.F, cx = K.cx, W = root.OrchardWeb, hooks = (K.ui && K.ui.web) || {};
+    const F = K.F, cx = K.cx, W = root.OrchardWeb, M = W.meter, hooks = (K.ui && K.ui.web) || {};
     let fs = null, db = null, gen = 0, watch = 0, codeMine = null;
     let live = {}, known = {}, asked = {}, meta = {}, cardRaw = {}, pubAt = {}, dropping = {};
 
     const path = (p) => { const m = /^data\/users\/([^/]+)\/([^/]+)$/.exec(p); return m ? "users/" + m[1] + "/data/" + m[2] : p; };
-    const plain = (s) => {
-      const d = s.exists() ? s.data() : undefined;
-      return { id: s.id, exists: d !== undefined, data: () => (d === undefined ? undefined : JSON.parse(JSON.stringify(d))), metadata: { fromCache: false, hasPendingWrites: false } };
-    };
     const pubIn = (id, d) => K.cleanPub(id, Object.assign({}, d, { u: id }));
     const cardDoc = (owner, reader) => fs.doc(db, "cards", owner, "to", reader);
     const itemDoc = (to, id) => fs.doc(db, "inbox", to, "items", id);
-    const commit = (w) => (off() ? offline() : w.commit().catch((e) => { throw mapErr(WRITE)(e); }));
+    const commit = (ops) => (off() ? offline() : M.batch(ops).catch((e) => { throw mapErr(WRITE)(e); }));
     const write = (f) => (off() ? offline() : Promise.resolve().then(f).catch((e) => { throw mapErr(WRITE)(e); }));
 
     /** Listens with cached and pending-write events dropped; a cached event while offline reports `unavailable`. */
     function listen(r, next, err) {
-      return fs.onSnapshot(r, { includeMetadataChanges: true }, (s) => {
+      return M.listen(r, (s) => {
         if (s.metadata.fromCache) { if (off()) err({ code: "unavailable", message: "offline" }); return; }
         if (!s.metadata.hasPendingWrites) next(s);
       }, (e) => err(mapErr(LISTEN)(e)));
@@ -60,10 +60,10 @@
       const r = fs.doc(db, path(p));
       return {
         id: r.id, path: p,
-        get: () => fs.getDoc(r).then(plain, (e) => { throw mapErr(LISTEN)(e); }),
-        set: (d) => write(() => fs.setDoc(r, d)),
-        delete: () => write(() => fs.deleteDoc(r)),
-        onSnapshot: (next, err) => listen(r, (s) => next(plain(s)), err)
+        get: () => M.get(r).catch((e) => { throw mapErr(LISTEN)(e); }),
+        set: (d) => write(() => M.set(r, d)),
+        delete: () => write(() => M.del(r)),
+        onSnapshot: (next, err) => listen(r, next, err)
       };
     }
 
@@ -113,6 +113,8 @@
         K.status("connecting");
         clearTimeout(watch);
         watch = setTimeout(() => { if (F.st.mode === "connecting" && F.me === id) K.onSubErr({ code: "unavailable" }); }, WATCH);
+        try { await M.ready(); } catch (e) { if (g === gen && F.st.mode === "connecting") { clearTimeout(watch); K.onSubErr(mapErr(LISTEN)(e)); } return; }
+        if (g !== gen || F.st.mode !== "connecting") return;
         K.subscribe();
       } finally { if (g === gen) F.connecting = false; }
     }
@@ -129,7 +131,7 @@
 
     function loaded() {
       F.allReady = true; F.wireCur = null;
-      fs.getDocs(fs.collection(db, "cards", F.me, "to")).then((q) => {
+      M.list(fs.collection(db, "cards", F.me, "to")).then((q) => {
         const docs = {};
         let at = 0;
         q.docs.forEach((d) => { docs[d.id] = cardOf(d.data()) || {}; at = Math.max(at, num(docs[d.id].at)); });
@@ -171,9 +173,9 @@
         if (live[id]) return;
         const L = live[id] = { u: [], wait: !!F.cx };
         if (L.wait) F.keysWait++;
-        L.u.push(listen(cardDoc(id, F.me), (s) => { cardRaw[id] = s.exists() ? cardOf(s.data()) || {} : null; cardState(id); K.openCards(); }, K.onSubErr));
+        L.u.push(listen(cardDoc(id, F.me), (s) => { cardRaw[id] = s.exists ? cardOf(s.data()) || {} : null; cardState(id); K.openCards(); }, K.onSubErr));
         L.u.push(listen(fs.doc(db, "pub", id), (s) => {
-          const d = s.exists() ? s.data() : null, k = d && pubIn(id, d);
+          const d = s.exists ? s.data() : null, k = d && pubIn(id, d);
           meta[id] = metaOf(d); known[id] = 1; pubAt[id] = Date.now();
           F.names[id] = meta[id].n;
           if (k) F.pubs[id] = k; else delete F.pubs[id];
@@ -192,7 +194,7 @@
       return s ? K.cleanCard(id, await cx.open(s.key, d, K.aadOf(id, F.me))) : null;
     }
 
-    /** Seals my card into one doc per recipient: new or re-keyed recipients at once, body refreshes at most every CARD_GAP (FLUSH_GAP when the page hides). */
+    /** Seals my card into one doc per recipient: new or re-keyed recipients at once, body refreshes at most every CARD_GAP (FLUSH_GAP when the page hides) and only while today's allowance covers them. */
     async function writeCard(force) {
       if (F.card.busy) { F.card.timer = setTimeout(() => { F.card.timer = 0; writeCard(force); }, 300); return; }
       if (!F.fr.share.on || !F.cx || !F.key || !F.card.docs || F.keysWait > 0 || !K.settled(K.friendIds(F.fr))) return;
@@ -200,8 +202,8 @@
       if (sig === F.card.last) return;
       F.card.busy = true;
       try {
-        const docs = F.card.docs, per = F.card.per, now = Date.now(), due = now >= F.card.at + (force === true ? FLUSH_GAP : CARD_GAP), mine = K.pubFp(F.key), ok = [], put = [];
-        let later = false;
+        const docs = F.card.docs, per = F.card.per, now = Date.now(), due = now >= F.card.at + (force === true ? FLUSH_GAP : CARD_GAP), mine = K.pubFp(F.key), ok = [];
+        let later = false, held = false, put = [];
         for (const id of to) {
           const p = await K.pairFor(id, P[id]), s = p && await cx.side(p, "", F.me, id), ks = K.pubFp(P[id]) + "|" + mine, aad = K.aadOf(F.me, id);
           if (!s) continue;
@@ -210,21 +212,20 @@
           const e = per[id];
           if (e && e.k === ks && e.b === b) continue;
           if (e && e.k === ks && !due) { later = true; continue; }
-          put.push([id, Object.assign(await cx.seal(s.key, body, aad), { at: now }), ks]);
+          if (!M.room(cardDoc(F.me, id).path)) { later = held = true; continue; }
+          put.push([id, Object.assign(await cx.seal(s.key, body, aad), { at: now }), ks, !(e && e.k === ks)]);
         }
         const gone = Object.keys(docs).filter((id) => ok.indexOf(id) < 0);
+        if (put.length + gone.length > M.left() && put.some((x) => !x[3])) { put = put.filter((x) => x[3]); later = held = true; }
         if (put.length || gone.length) {
-          const w = fs.writeBatch(db);
-          put.forEach((x) => w.set(cardDoc(F.me, x[0]), x[1]));
-          gone.forEach((id) => w.delete(cardDoc(F.me, id)));
-          await commit(w);
+          await commit(put.map((x) => [cardDoc(F.me, x[0]), x[1]]).concat(gone.map((id) => [cardDoc(F.me, id), null])));
           put.forEach((x) => { docs[x[0]] = x[1]; per[x[0]] = { b, k: x[2] }; });
           gone.forEach((id) => { delete docs[id]; delete per[id]; });
           if (put.length && due) F.card.at = now;
         }
         const at = Object.keys(docs).reduce((m, id) => Math.max(m, num(docs[id].at)), 0);
         Object.assign(F.card, { last: later ? null : sig, rs, to: ok, exists: true, doc: { at } });
-        if (later && !F.card.timer) F.card.timer = setTimeout(() => { F.card.timer = 0; writeCard(); }, Math.max(1000, F.card.at + CARD_GAP - now));
+        if (later && !F.card.timer) F.card.timer = setTimeout(() => { F.card.timer = 0; writeCard(); }, held ? CARD_GAP : Math.max(1000, F.card.at + CARD_GAP - now));
         K.renderSoon();
       } catch (e) { K.writeErr(e); }
       finally { F.card.busy = false; if (!F.fr.share.on && F.card.exists) delCard(); }
@@ -236,9 +237,9 @@
       F.card.busy = true;
       try {
         if (off()) throw { code: "unavailable" };
-        const q = await fs.getDocs(fs.collection(db, "cards", F.me, "to")).catch((e) => { throw mapErr(LISTEN)(e); });
+        const q = await M.list(fs.collection(db, "cards", F.me, "to")).catch((e) => { throw mapErr(LISTEN)(e); });
         const ids = uniq(q.docs.map((d) => d.id).concat(Object.keys(F.card.docs || {})));
-        if (ids.length) { const w = fs.writeBatch(db); ids.forEach((id) => w.delete(cardDoc(F.me, id))); await commit(w); }
+        if (ids.length) await commit(ids.map((id) => [cardDoc(F.me, id), null]));
         Object.assign(F.card, { exists: false, last: null, doc: null, to: [], rs: null, docs: {}, per: {} });
         K.renderSoon();
       } catch (e) { K.writeErr(e); }
@@ -307,9 +308,8 @@
     function dropItems(ids) {
       ids = ids.filter((id) => !dropping[id]).slice(0, DROP_MAX);
       if (!ids.length || off()) return;
-      const w = fs.writeBatch(db);
-      ids.forEach((id) => { dropping[id] = 1; w.delete(itemDoc(F.me, id)); });
-      w.commit().catch(() => ids.forEach((id) => { delete dropping[id]; }));
+      ids.forEach((id) => { dropping[id] = 1; });
+      M.batch(ids.map((id) => [itemDoc(F.me, id), null])).catch(() => ids.forEach((id) => { delete dropping[id]; }));
     }
 
     /** Decrypts my inbox into incoming challenges and answers, the same shapes the claude.ai build reads from peers' docs. */
@@ -367,13 +367,13 @@
       const gone = Object.keys(F.sent.s).filter((id) => !want[id] && !(peers.indexOf(F.sent.s[id].t) >= 0 && !known[F.sent.s[id].t]));
       if (!make.length && !gone.length) return;
       let retry = null;
-      await Promise.all(make.map((m) => write(() => fs.setDoc(itemDoc(m.to, m.id), m.d)).then(() => { F.sent.s[m.id] = { t: m.to, k: m.k }; }, (e) => {
+      await Promise.all(make.map((m) => write(() => M.set(itemDoc(m.to, m.id), m.d)).then(() => { F.sent.s[m.id] = { t: m.to, k: m.k }; }, (e) => {
         if (e.code === "denied") F.sent.s[m.id] = { t: m.to, k: m.k }; else retry = e;
       })));
       await Promise.all(gone.map((id) => {
         const g = F.sent.s[id];
         if (g.k < now) { delete F.sent.s[id]; return null; }
-        return write(() => fs.deleteDoc(itemDoc(g.t, id))).then(() => { delete F.sent.s[id]; }, (e) => { if (e.code === "denied") delete F.sent.s[id]; else retry = e; });
+        return write(() => M.del(itemDoc(g.t, id))).then(() => { delete F.sent.s[id]; }, (e) => { if (e.code === "denied") delete F.sent.s[id]; else retry = e; });
       }));
       await F.sentRef.set(F.sent);
       if (retry) throw retry;
@@ -395,6 +395,10 @@
     W.on((kind) => {
       if (kind === "auth") { gen++; K.reset(); K.status("off"); codeMine = null; connect(); }
       if (kind === "ui" && F.st.mode === "signedout") K.repaint();
+    });
+    M.on((kind) => {
+      if (kind === "rest" && (F.st.mode === "ready" || F.st.mode === "connecting")) K.onSubErr({ code: "resting" });
+      if (kind === "wake" && F.st.mode === "resting") connect();
     });
     addEventListener("offline", () => { if (F.st.mode === "ready" || F.st.mode === "connecting") K.onSubErr({ code: "unavailable" }); });
     addEventListener("online", () => { if (F.st.mode === "offline") { clearTimeout(F.revive); connect(); } });

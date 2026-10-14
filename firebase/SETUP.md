@@ -41,8 +41,37 @@ npx firebase-tools@15.31.0 login
 npx firebase-tools@15.31.0 deploy --only hosting,firestore:rules
 ```
 
-The site is then at `https://<project-id>.web.app`. Run `sh firebase/build.sh` again before every deploy, because
+The site is then at `https://<project-id>.web.app`. Friends needs nothing else in the console: the same deploy publishes its
+rules, and it needs no indexes. Run `sh firebase/build.sh` again before every deploy, because
 `firebase/public/` is generated.
+
+## Daily allowance
+
+The free plan allows 20,000 writes (deletes included) and 50,000 reads a day, reset at midnight Pacific time. The game splits that
+into allowance blocks so it can't run out, however many people play:
+
+- A block lets one browser make 36 writes and 90 reads. The day has 400 blocks, and one player can claim at most 4 a day. In the
+  worst case that is 15,200 writes and about 38,400 reads, leaving about 20% of the quota as headroom.
+- Each document also has a daily write limit (save 100, friends 20, keys 10, pins 20, chal 40, sent 40, pub 20, each card 12).
+- When a player's blocks are used up, or the day's 400 are gone, the game keeps saving on the device and shows when it syncs again
+  (after midnight Pacific, in the player's local time). It reconnects on its own after the reset.
+
+To see today's usage, open **Firestore Database > Data > days**. The document named after today's day number holds `n`, the blocks
+claimed so far (out of 400), and its `u` subcollection holds each player's `k` (out of 4). The day number counts Pacific days since
+1 January 1970; on the site, `OrchardWeb.meter.today()` in the browser console prints it. Old `days` documents can be deleted at any
+time.
+
+To change the limits, for example after moving to the Blaze plan, edit both files and keep them in step, then rebuild and deploy
+hosting and rules together:
+
+- `js/backend-firebase.js`: `ALLOW` (`day` blocks, `user` blocks per player, `writes` and `reads` per block, `near`, the day count that
+  slows saving to every 10 minutes) and `CAPS` (per-document daily writes).
+- `firebase/firestore.rules`: `n <= 400` and `k <= 4` in `match /days/{day}`, and the caps passed to `counted(...)`.
+
+Keep `day × (writes + 2)` and `day × (reads + 6)` about 20% under the daily quota you pay for. The daylight-time table in both files
+covers 2026–2036; before 2037, raise `TO` in `dev/web/gen-dst.js`, run `node dev/web/gen-dst.js` and deploy.
+
+Tabs left open from a build before this change can't save (the rules refuse writes without the daily counter) until they reload.
 
 ## Optional: try it locally first
 

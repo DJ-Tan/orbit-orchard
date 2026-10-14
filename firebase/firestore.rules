@@ -17,9 +17,44 @@ service cloud.firestore {
       return s is string && s.size() >= lo && s.size() <= hi && s.matches('[A-Za-z0-9_-]+');
     }
 
+    function dst(t) {
+      return (t >= 1772964000000 && t < 1793523600000)
+        || (t >= 1805018400000 && t < 1825578000000)
+        || (t >= 1836468000000 && t < 1857027600000)
+        || (t >= 1867917600000 && t < 1888477200000)
+        || (t >= 1899367200000 && t < 1919926800000)
+        || (t >= 1930816800000 && t < 1951376400000)
+        || (t >= 1962871200000 && t < 1983430800000)
+        || (t >= 1994320800000 && t < 2014880400000)
+        || (t >= 2025770400000 && t < 2046330000000)
+        || (t >= 2057220000000 && t < 2077779600000)
+        || (t >= 2088669600000 && t < 2109229200000);
+    }
+
+    function today() {
+      let t = request.time.toMillis();
+      return (t - (dst(t) ? 25200000 : 28800000)) / 86400000;
+    }
+
+    function seatPath(day) {
+      return /databases/$(database)/documents/days/$(day)/u/$(request.auth.uid);
+    }
+
+    function seated() {
+      return exists(seatPath(string(today())));
+    }
+
+    function counted(cap) {
+      let q = request.resource.data.q;
+      let d = today();
+      let old = resource == null ? {} : resource.data.get('q', {});
+      return q is map && q.keys().hasOnly(['d', 'n']) && q.d == d && q.n is int && q.n <= cap
+        && (old.get('d', -1) == d ? q.n == old.n + 1 : (q.n == 1 && seated()));
+    }
+
     function validSave(d) {
       return d.keys().hasAll(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt'])
-        && d.keys().hasOnly(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt', 'seen', 'coach', 'announced', 'skins', 'at'])
+        && d.keys().hasOnly(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt', 'seen', 'coach', 'announced', 'skins', 'at', 'q'])
         && d.v == 2
         && d.gen is number
         && d.settingsAt is number
@@ -41,23 +76,23 @@ service cloud.firestore {
     }
 
     function validFriends(d) {
-      return d.keys().hasOnly(['v', 'f', 'share', 'code', 'nm']) && within(d.get('f', {}), 500);
+      return d.keys().hasOnly(['v', 'f', 'share', 'code', 'nm', 'q']) && within(d.get('f', {}), 500);
     }
 
     function validKeys(d) {
-      return d.keys().hasOnly(['v', 'jwk', 'at']) && within(d.get('jwk', {}), 8);
+      return d.keys().hasOnly(['v', 'jwk', 'at', 'q']) && within(d.get('jwk', {}), 8);
     }
 
     function validPins(d) {
-      return d.keys().hasOnly(['v', 'p']) && within(d.get('p', {}), 500);
+      return d.keys().hasOnly(['v', 'p', 'q']) && within(d.get('p', {}), 500);
     }
 
     function validChal(d) {
-      return d.keys().hasOnly(['v', 'out', 'res', 'to', 'from']) && within(d.get('out', {}), 40) && within(d.get('res', {}), 70);
+      return d.keys().hasOnly(['v', 'out', 'res', 'to', 'from', 'q']) && within(d.get('out', {}), 40) && within(d.get('res', {}), 70);
     }
 
     function validSent(d) {
-      return d.keys().hasOnly(['v', 's']) && within(d.get('s', {}), 300);
+      return d.keys().hasOnly(['v', 's', 'q']) && within(d.get('s', {}), 300);
     }
 
     function validData(name, d) {
@@ -70,14 +105,14 @@ service cloud.firestore {
     }
 
     function validPub(d) {
-      return d.keys().hasAll(['x', 'y', 'at']) && d.keys().hasOnly(['x', 'y', 'at', 'n', 's'])
+      return d.keys().hasAll(['x', 'y', 'at']) && d.keys().hasOnly(['x', 'y', 'at', 'n', 's', 'q'])
         && b64(d.x, 43, 43) && b64(d.y, 43, 43) && d.at is number
         && (!('n' in d) || (d.n is string && d.n.size() > 0 && d.n.size() <= 40))
         && (!('s' in d) || d.s == true);
     }
 
     function validCard(d) {
-      return d.keys().hasOnly(['iv', 'ct', 'at']) && d.keys().hasAll(['iv', 'ct', 'at'])
+      return d.keys().hasOnly(['iv', 'ct', 'at', 'q']) && d.keys().hasAll(['iv', 'ct', 'at'])
         && b64(d.iv, 16, 16) && b64(d.ct, 1, 4096) && d.at is number;
     }
 
@@ -92,25 +127,27 @@ service cloud.firestore {
 
     match /users/{uid}/data/{name} {
       allow read, delete: if signedInAs(uid);
-      allow create, update: if signedInAs(uid) && validData(name, request.resource.data);
+      allow create, update: if signedInAs(uid) && validData(name, request.resource.data)
+        && counted({'save': 100, 'friends': 20, 'keys': 10, 'pins': 20, 'chal': 40, 'sent': 40}[name]);
     }
 
     match /pub/{uid} {
       allow get: if signedIn();
-      allow create, update: if signedInAs(uid) && validPub(request.resource.data);
+      allow create, update: if signedInAs(uid) && validPub(request.resource.data) && counted(20);
       allow delete: if signedInAs(uid);
     }
 
     match /codes/{code} {
       allow get: if signedIn();
       allow create: if signedIn() && code.matches('[2-9A-HJKMNP-Z]{6}')
-        && request.resource.data.keys().hasOnly(['u']) && request.resource.data.u == request.auth.uid;
+        && request.resource.data.keys().hasOnly(['u']) && request.resource.data.u == request.auth.uid
+        && seated();
       allow delete: if signedIn() && resource.data.u == request.auth.uid;
     }
 
     match /cards/{owner}/to/{reader} {
       allow read: if signedInAs(owner) || signedInAs(reader);
-      allow create, update: if signedInAs(owner) && reader != owner && validCard(request.resource.data);
+      allow create, update: if signedInAs(owner) && reader != owner && validCard(request.resource.data) && counted(12);
       allow delete: if signedInAs(owner);
     }
 
@@ -119,8 +156,28 @@ service cloud.firestore {
       allow create: if signedIn() && uid != request.auth.uid
         && item.matches(request.auth.uid + '_[A-Za-z0-9_-]{16}')
         && validItem(request.resource.data)
-        && exists(/databases/$(database)/documents/pub/$(uid));
+        && exists(/databases/$(database)/documents/pub/$(uid))
+        && seated();
       allow delete: if signedInAs(uid) || (signedIn() && resource.data.from == request.auth.uid);
+    }
+
+    match /days/{day} {
+      allow get: if signedIn();
+      allow create, update: if signedIn() && day == string(today())
+        && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n is int
+        && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1
+        && request.resource.data.n <= 400
+        && getAfter(seatPath(day)).data.k == (exists(seatPath(day)) ? get(seatPath(day)).data.k : 0) + 1;
+
+      match /u/{uid} {
+        allow get: if signedInAs(uid);
+        allow create, update: if signedInAs(uid) && day == string(today())
+          && request.resource.data.keys().hasOnly(['k']) && request.resource.data.k is int
+          && request.resource.data.k == (resource == null ? 0 : resource.data.k) + 1
+          && request.resource.data.k <= 4
+          && getAfter(/databases/$(database)/documents/days/$(day)).data.n
+            == (exists(/databases/$(database)/documents/days/$(day)) ? get(/databases/$(database)/documents/days/$(day)).data.n : 0) + 1;
+      }
     }
   }
 }

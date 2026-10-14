@@ -776,7 +776,8 @@
   function onSubErr(e) {
     const code = (e && e.code) || "unavailable";
     teardown();
-    if (code === "unavailable" || code === "resource_exhausted") {
+    if (code === "resting") status("resting");
+    else if (code === "unavailable" || code === "resource_exhausted") {
       status("offline");
       clearTimeout(F.revive);
       F.revive = setTimeout(connect, 20000 + Math.random() * 20000);
@@ -787,6 +788,7 @@
     const code = (e && e.code) || "unavailable";
     if (code === "invalid_argument" || code === "transform_error") { teardown(); status("readonly"); }
     else if (code === "quota_exceeded") note(B.tx.full, "bad");
+    else if (code === "resting") { teardown(); status("resting"); }
     else if (code === "unavailable" && retry && F.retries < 3) { F.retries++; setTimeout(retry, 1500 + Math.random() * 2500); }
     else if (code === "unavailable") note(B.tx.unreach, "bad");
     else { teardown(); status("error"); }

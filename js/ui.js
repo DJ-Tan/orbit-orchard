@@ -477,7 +477,7 @@
     $("#pressPrompt").textContent = touch ? "Tap to begin" : "Press any key or click to begin";
     $("#scr-title").addEventListener("click", () => { gesture(); enterHub(); });
     if (web) {
-      $("#pressPrompt").insertAdjacentHTML("afterend", `<button class="btn small ghost web-sign" id="webSign" type="button" hidden>${GLOGO}Sign in with Google to save to the cloud</button>`);
+      $("#pressPrompt").insertAdjacentHTML("afterend", `<button class="btn small ghost web-sign" id="webSign" type="button" hidden>${GLOGO}Sign in with Google to save to the cloud</button><p class="web-rest" id="webRest" role="status" hidden></p>`);
       $("#webSign").addEventListener("click", (e) => { e.stopPropagation(); gesture(); webSignIn(); });
       webTitle();
     }
@@ -1909,9 +1909,9 @@
   let cloud = null;
   let cloudSt = { mode: "connecting", reason: "", at: 0, who: null };
   const web = window.OrchardWeb || null;
-  const WEB_GAP = 30000;
+  const WEB_GAP = 120000, WEB_SLOW = 600000;
   const GLOGO = '<svg class="i glogo" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14a6.6 6.6 0 0 1 0-4.2V7H2.1a11 11 0 0 0 0 9.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .6 4.2 1.6l3.1-3.1A11 11 0 0 0 2.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>';
-  const CLOUD_TEXT = { connecting: "Connecting", synced: "Synced", saving: "Saving", local: "This device", readonly: "This device", offline: "Offline", error: "Sync problem" };
+  const CLOUD_TEXT = { connecting: "Connecting", synced: "Synced", saving: "Saving", local: "This device", readonly: "This device", offline: "Offline", error: "Sync problem", resting: "Resting" };
   function cloudChip() {
     const s = cloudSt, on = s.mode === "synced" || s.mode === "saving" || s.mode === "connecting";
     const title = "Cloud save: " + (CLOUD_TEXT[s.mode] || s.mode) + (s.reason ? ". " + s.reason : "");
@@ -1928,6 +1928,7 @@
     if (screen === "hub") refreshChips();
     const c = $("#cloudCard");
     if (c) renderCloudCard(c);
+    if (web) webTitle();
   }
   const cloudLabel = (s) => s.mode === "synced" ? `Synced ${ago(s.at)}` : s.mode === "saving" ? "Saving to the cloud" : s.mode === "connecting" ? "Connecting to the cloud" : s.reason || CLOUD_TEXT[s.mode];
   function renderCloudCard(c) {
@@ -1949,7 +1950,7 @@
     const fileBtns = `<button class="btn small" type="button" data-c="export">${ic("down")}Download save</button><button class="btn small" type="button" data-c="import">${ic("up")}Load a save file</button><input type="file" accept=".json,application/json" hidden data-c="file">`;
     c.innerHTML = `<div class="cc-id"><span class="av"></span><div><b class="nm"></b><span class="muted em"></span><span class="muted st"><i class="cdot ${esc(s.mode)}"></i><span></span></span></div></div>
       <p class="muted cc-note">${a ? "Progress, stars, trophies, nectar and your look follow your Google account to any device. Sound levels stay per device. Signing out keeps this device's save." : "Your progress is saved in this browser. Sign in with Google to back it up and carry it to other devices. What you've played here is merged in, nothing is lost."}</p>
-      <div class="row">${a ? `<button class="btn small" type="button" data-c="sync" ${live ? "" : "disabled"}>${ic("sync")}Sync now</button>${fileBtns}<button class="btn small ghost" type="button" data-c="signout">Sign out</button>` : signBtn + fileBtns}</div>`;
+      <div class="row">${a ? `<button class="btn small" type="button" data-c="sync" ${live && s.mode !== "resting" ? "" : "disabled"}>${ic("sync")}Sync now</button>${fileBtns}<button class="btn small ghost" type="button" data-c="signout">Sign out</button>` : signBtn + fileBtns}</div>`;
     $(".nm", c).textContent = a ? a.name || a.email || "Your orchard" : "Saved on this device";
     $(".em", c).textContent = a ? a.email : "";
     $(".em", c).hidden = !a || !a.email;
@@ -1963,6 +1964,8 @@
     if (!b) return;
     b.hidden = !web.known() || !web.available() || !!web.account();
     b.disabled = web.busy();
+    const r = $("#webRest");
+    if (r) { r.hidden = !web.account() || cloudSt.mode !== "resting"; r.textContent = r.hidden ? "" : cloudSt.reason; }
   }
   function webSignIn() {
     if (!web || web.busy()) return;
@@ -1978,6 +1981,7 @@
       note(a ? `Signed in as ${a.email || a.name}` : "Signed out. Your progress stays on this device.", a ? "good" : "info");
     }
     if (kind === "error" && err && err.code) note(`Sign-in didn't finish (${err.code}). Try again.`, "bad");
+    if (kind === "wake" && cloud && cloudSt.mode === "resting") cloud.syncNow();
     refreshCloudUi();
     webTitle();
   }
@@ -2726,7 +2730,7 @@
     checkAch(true);
     renderFlourish();
     if (gained) note(`Star targets got friendlier: +${gained} star${gained === 1 ? "" : "s"} from your past clears`, "good");
-    if (window.OrchardCloud) cloud = window.OrchardCloud.start({ backend: web, minGap: web ? WEB_GAP : 0, get: () => S, replace: adoptSave, onStatus: (st) => { cloudSt = web ? web.view(st) : st; refreshCloudUi(); if (st.mode !== "connecting" && st.mode !== "saving") frostCheck(); } });
+    if (window.OrchardCloud) cloud = window.OrchardCloud.start({ backend: web, minGap: web ? () => (web.meter.slow() ? WEB_SLOW : WEB_GAP) : 0, get: () => S, replace: adoptSave, onStatus: (st) => { cloudSt = web ? web.view(st) : st; refreshCloudUi(); if (st.mode !== "connecting" && st.mode !== "saving") frostCheck(); } });
     if (web) web.on(onWeb);
     if (window.OrchardFriends) window.OrchardFriends.init({
       get: () => S, worlds: () => WORLDS, levelsOf, ach: () => ACH, liveStreak, nectar, dayKey, DIFF, CHAL_PAY, CHAL_CAP,
