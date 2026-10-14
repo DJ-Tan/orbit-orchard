@@ -268,6 +268,11 @@ async function allowance(env, alice, bob, anon) {
   const days = {};
   for (let i = 0; i < 71; i++) days[String(20250101 + i)] = { stars: 1 };
   await check("too many daily days rejected", assertFails(put(alice, SP, bad((d) => { d.daily.days = days; }))));
+  const pals = { f: 1, c: 1 };
+  for (let i = 0; i < 198; i++) pals["w:" + i.toString(36) + ":abcdef" + String(i).padStart(4, "0")] = 1;
+  await check("Friends trophy events at the cap accepted", assertSucceeds(put(alice, SP, bad((d) => { d.pals = pals; }))));
+  await check("too many Friends trophy events rejected", assertFails(put(alice, SP, bad((d) => { d.pals = Object.assign({ p: 1 }, pals); }))));
+  await check("Friends trophy events must be a map", assertFails(put(alice, SP, bad((d) => { d.pals = ["f"]; }))));
 
   await check("unknown private doc denied", assertFails(setDoc(doc(alice, "users/alice/data/notes"), { any: 1 })));
   await check("claude.ai path denied", assertFails(setDoc(doc(alice, "data/users/alice/save"), save())));

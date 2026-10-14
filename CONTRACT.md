@@ -268,13 +268,22 @@ or when its id is in `announced`. `announced` (synced as a union) records every 
 opened under an older order stay open. On the first boot of a save without `sync.wo` (device-local), the UI also marks every world
 the old id-order rule (1, 2, 3, 4, 5) had opened, then sets `sync.wo`. Plots inside a world keep their usual gating.
 
+Trophies (`buildAch` in `ui.js`, 39 in all) each carry a category `cat`, and the Trophies tab shows them in that order as sections with
+an icon, a heading and an earned/total count, under the overall summary bar and a row of jump chips (wrapping on desktop, a 3×2 grid
+at ≤ 600 px). Categories: **Journey** (First sprout, Allotment, Market garden, Orbit orchard, the five world keepers), **Mastery**
+(Full bloom, Green thumb, Constellation, Gilded, Pollinator, Gold dust, Last seed, Stubborn bloom), **Sky physics** (Sunburnt, Skater,
+Folded, Slipstream, Event horizon), **Daily & Zen** (Sky watcher, Seven skies, Stillness, Night shift), **Collection** (Sower, Botanist,
+Glasshouse, Dressed up, Field naturalist) and **Friends** (see "Friends trophies"). The Friends section always shows, with progress from
+the save; while Friends isn't ready it adds one line ("Sign in to use Friends and earn these." signed out on the web, otherwise
+"Friends isn't connected here. Trophies earned elsewhere still count.").
+
 ## Cloud save (`js/cloud.js` → `window.OrchardCloud`)
 
 Local-first sync of the save to the viewer's private artifact document `data/users/<id>/save` (capabilities
 `db`, `user` with scope `profile`, `downloads`). The browser save stays the source of truth offline; every
 local `save()` notifies the sync, which merges and writes once per real change.
 
-Merge rules: stars max, best/time min, golden or, trophies and unlocks union, daily days keep the official run
+Merge rules: stars max, best/time min, golden or, trophies, unlocks and Friends trophy events (`pals`) union, daily days keep the official run
 (earliest `at`; records without `at` lose to timed ones and fall back to the better result, then a canonical tie-break)
 plus a `best` of every run on either side, stats and flora are per-device counters summed across devices, wallet ledgers are keyed unions,
 synced settings (`skin grid shake reducedMotion colorblind assist unlockAll trail fastForward`) are last-write-wins by
@@ -299,11 +308,11 @@ from `par + 4` seeds), pollen dots, the live streak and "(assist)" when the offi
 Balance = sum of `wallet.earn` minus sum of `wallet.spend`; every entry is keyed so it is earned once.
 Earn: first clear 10, second star 5, third star 10, golden 10, Perfect 5 (`par:<id>`, cleared in exactly par
 seeds without guides), Daily Sky 15/day, trophies by tier: bronze 20, silver 40, gold 80, platinum 150 (Sower pays none; `ach:<id>` holds the first 20 and
-`tro:<id>` the rest, so saves from before tiers get topped up), daily visit 10 + 2 per consecutive day
+`tro:<id>` the rest, so saves from before tiers get topped up; the 31 game trophies pay 1580, the 8 Friends trophies 320), daily visit 10 + 2 per consecutive day
 (max 20), plus 50 on every 7th consecutive day (`week:<YYYYMMDD>`), Zen sky 2/3/4/5/6 by difficulty 1–5 for the first 3 completed Zen skies of a day (`zen:<YYYYMMDD>:<1..3>`; two
 devices racing for the same slot merge to one, so the cap holds across devices). Rough totals: W1 at three stars about 550
-(810 with every golden and Perfect); the whole game 2750 from clears and stars, 520 golden, 550 Perfect and 640 from trophies,
-about 4460; after that a regular player makes about 25–55 a day from visits, the Daily Sky and Zen. Level rewards are derived from the level record (`stars`, `golden`, and `best <= par` for Perfect),
+(810 with every golden and Perfect); the whole game 2750 from clears and stars, 520 golden, 550 Perfect and 1580 from trophies,
+about 5400 (plus 320 from Friends trophies); after that a regular player makes about 25–55 a day from visits, the Daily Sky and Zen. Level rewards are derived from the level record (`stars`, `golden`, and `best <= par` for Perfect),
 so the backfill on load grants anything missing; the Perfect mark on plot nodes and plates reads the wallet key.
 
 Guided clears: an attempt is guided if Oracle guides were on at any point (`Orchard.getState().guides`). A guided
@@ -441,14 +450,29 @@ expiry + 1 h don't count); at most 10 open outgoing; entries pruned after 21 day
 pollen, then less time; an answer with a different seed or difficulty is void; after expiry a lone result wins by walkover. The first
 recorded result per side stays. Nectar: 5 per recorded challenge result, first 3 a day (`chal:<YYYYMMDD>:<1..3>`, validated in `cleanWallet`).
 
+Friends trophies (category Friends, ids `fr-*`): Over the fence (follow another gardener, bronze), Good neighbours (open a friend's
+progress card, bronze), Garden club (cards of 5 friends, gold), Gauntlet (send a challenge, bronze), Cross-pollinated (sow a challenge a
+friend sent you, bronze), Blue ribbon (win a challenge, silver), Best in show (win 10, gold), Old rivals (beat the same friend 3 times,
+silver). Only the synced Friends state proves them: whenever Friends repaints in mode `ready` with the friends and challenge docs loaded,
+`palKeys` lists the events and `ui.pals(keys)` records new ones in the save's `pals` map (`{ <key>: at }`), then checks trophies. Keys:
+`f` (a non-deleted follow), `c` (an outgoing challenge), `p` (a valid answer of mine to a challenge from another player's doc),
+`m:<h>` (a followed player's card decrypted and owned by them), `w:<h>:<cid>` (verdict `done` with my side winning, from either
+direction). `<h>` is the FNV-1a hash of the peer id in base 36, so the save holds no friend ids. My own id never counts (a self-follow
+can open my own card), and walkovers, void answers, declines, expiries and draws are never wins. Since the keys are idempotent and
+`pals` merges as a keyed union, a win or card seen on two devices counts once, and challenge pruning after 21 days loses nothing. Caps:
+12 `m:` and 60 `w:` keys (later ones are dropped), malformed keys ignored and cleaned on save-file import. Earned trophies stay in
+`ach` as usual. Cards count trophies and tiers as before (`cleanCard` caps at 999), so older clients read newer cards unchanged.
+
 Tests: `node dev/friends/test-friends.js`; browser harness `dev/friends/serve.py` (port 8765), `dev/friends/build.sh`,
 `dev/friends/shot.sh NAME WxH "QUERY" [flow.html]` with a multi-user mock (`uid=`, `level=view|interact|owner`, `fx=rich|empty`,
 `mock=none`, `signedout=1`, `none=db`, `noprofile=1`, `can=null`, `nocrypto=1`, `skin=`, `open=new|hist|play|search`, `scroll=`). The mock
 applies `rules.js` (private `data/users/<id>/` per player, the owner included). `fx=rich` seeds keys and v2 cards: Bob follows Alice back,
 Cara doesn't, Dev has a v1 card. `fx=rich` also seeds each player's private challenge history and the sealed `chal/<id>` docs, and Gil Guest is a friend without a key.
 `flow.html` runs two players end to end; `cards.html` runs the card privacy checks (mutual, one-way, outsider decrypt attempts,
-unfollow, key rotation, sharing off, v1 cards, no WebCrypto): `shot.sh cards 1600x900 "" cards.html`; `chal.html` runs the challenge
-privacy checks (play and answer, nectar once, outsider reads, walkover and expiry, key rotation, keyless friends, v1 migration):
+unfollow, key rotation, sharing off, v1 cards, no WebCrypto, Good neighbours only for a mutual card and never for a self-follow, and
+back from the cloud save after a reset): `shot.sh cards 1600x900 "" cards.html`; `chal.html` runs the challenge
+privacy checks (play and answer, nectar once, Friends trophies for the right side and none for a walkover, outsider reads, walkover and
+expiry, key rotation, keyless friends, v1 migration):
 `shot.sh chal 1500x900 "" chal.html`; `trust.html` runs key pinning (owner swaps a key, warning, accept, verified badge, safety
 codes on both screens, own-key restore, prompt re-wrap after a follow and after a quick reload). `fx=rich&pins=1` seeds Alice's pins (Bob
 verified, Cara's key changed) and `safe=<id>` opens that row's safety code. `dev/friends/LIVE-CHECK.md` is the manual check for claude.ai.
@@ -573,9 +597,9 @@ the owner only for the names `save friends keys pins chal sent`, each with `hasO
 43 base64url chars, `n` 1–40 chars and `s` only `true`, codes 6 chars from the code alphabet, card `ct` up to 4096 chars and item
 `ct` up to 2048, item `at` within a day of `request.time` and `k` after `at` by at most 22 days, and item creation needing the
 recipient's `pub` doc (one `exists()` read). No query needs a composite index. `save` must have the wire keys (`v gen levels ach fails stats flora daily wallet settings settingsAt`,
-optional `seen coach announced skins at`, nothing else), `v == 2`, numeric `gen` and `settingsAt`, map-typed sections, and entry
+optional `seen coach announced skins pals at`, nothing else), `v == 2`, numeric `gen` and `settingsAt`, map-typed sections, and entry
 caps that keep it under about 900 KB (Firestore can't measure bytes in rules): levels and fails 400, trophies 200, devices 300,
-daily days 70, wallet earn 15000, spend 3000, frost 400. Every `hasOnly` list allows `q`; the metered docs need a valid `q`
+daily days 70, wallet earn 15000, spend 3000, frost 400, `pals` 200. Every `hasOnly` list allows `q`; the metered docs need a valid `q`
 (below), and inbox and code creates need the caller's seat for today. `days` docs follow the table, with the day id equal to
 `string(today())`. Everything else is denied.
 
@@ -622,7 +646,7 @@ full day. `restshots` seeds a user at 4 blocks (`rest.html?seed=1`) and takes `s
 on different origins (sign-in merge, live sync, Download and Load, sign out, Friends asks to sign in, no console errors); `offline.html` reloads
 from the service worker with the server gone and plays without the SDK. `friends.html` runs Friends with three Google users on three
 origins (`127.0.0.1:8771`, `localhost:8771`, `127.0.0.1:8773` from `killable.py`): codes, mutual cards, one-way, outsider reads denied,
-challenge and answer, nectar once, walkover and expiry, admin key swap and own-key restore, lost key with pause, safety codes, accept
+challenge and answer, nectar once, Friends trophies (mutual, one-way, win, walkover), walkover and expiry, admin key swap and own-key restore, lost key with pause, safety codes, accept
 and verify, name setting, unfollow, sharing off, sign out, no console errors; it uses the emulator's `Bearer owner` REST access as the
 project owner. `frshots` seeds two players with an open challenge (`friends.html?seed=1`) and takes the Friends screenshots
 (`shot=friends-out|friends-in`, `who=alice|bob`, `safe=first`, `scroll=`). `FF_CA` adds root CAs to the throwaway Firefox profiles

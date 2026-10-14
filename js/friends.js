@@ -348,11 +348,37 @@
     return g.join(" ");
   }
 
+  /** Short FNV-1a hash of an id in base 36. */
+  function palHash(s) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+    return h.toString(36);
+  }
+
+  /** Trophy event keys my Friends state proves: f follow, c challenge sent, p challenge answered, m:<peer> card seen, w:<peer>:<cid> win. */
+  function palKeys(o) {
+    const me = o.me, other = (id) => validId(id) && id !== me, keys = [], ids = friendIds(o.fr).filter(other);
+    if (ids.length) keys.push("f");
+    ids.forEach((id) => { const s = o.cards[id]; if (s && s.st === "ok" && s.c && s.c.u === id) keys.push("m:" + palHash(id)); });
+    if (Object.keys(o.mine.out).some((k) => other(o.mine.out[k].to))) keys.push("c");
+    o.inc.forEach((c) => {
+      if (!other(c.from)) return;
+      const v = verdict(c, o.now);
+      if (v.rv) keys.push("p");
+      if (v.state === "done" && v.win === "r") keys.push("w:" + palHash(c.from) + ":" + c.cid);
+    });
+    o.out.forEach((c) => {
+      const v = other(c.to) && verdict(c, o.now);
+      if (v && v.state === "done" && v.win === "s") keys.push("w:" + palHash(c.to) + ":" + c.cid);
+    });
+    return uniq(keys);
+  }
+
   const api = {
     TTL, KEEP, TOMB, MAX_OPEN, MAX_FRIENDS, CARD_GAP, canon, validId, validCid, codeOk, parseCode, fmtCode, newCode, newCid, randSeed,
     cleanFriends, mergeFriends, pruneFriends, friendIds, buildCard, cleanCard, cleanPub, cleanPriv, cleanSealed, cardRecips, recipSig, pubFp, aadOf, cleanResult, cmpResult, cleanChal, mergeChal, finishChal,
     verdict, incomingOf, outgoingOf, openCount, chalAad, pruneAt, cleanWire, chalTargets, chalEntry,
-    jwkCanon, cleanPins, mergePins, pinState, setPin, safetyInput, safetyDigits
+    jwkCanon, cleanPins, mergePins, pinState, setPin, safetyInput, safetyDigits, palHash, palKeys
   };
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
 
@@ -1111,7 +1137,13 @@
   function renderSoon() {
     badge();
     if (F.raf) return;
-    F.raf = setTimeout(() => { F.raf = 0; paint(); }, 16);
+    F.raf = setTimeout(() => { F.raf = 0; tally(); paint(); }, 16);
+  }
+
+  /** Reports the trophy events my synced Friends state proves. */
+  function tally() {
+    if (F.st.mode !== "ready" || !F.me || !F.frReady || !F.mineReady || !ui.pals) return;
+    ui.pals(palKeys({ me: F.me, fr: F.fr, cards: F.cards, mine: F.mine, inc: incoming(), out: outgoing(), now: Date.now() }));
   }
 
   function fillNames(box) {

@@ -54,7 +54,7 @@ service cloud.firestore {
 
     function validSave(d) {
       return d.keys().hasAll(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt'])
-        && d.keys().hasOnly(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt', 'seen', 'coach', 'announced', 'skins', 'at', 'q'])
+        && d.keys().hasOnly(['v', 'gen', 'levels', 'ach', 'fails', 'stats', 'flora', 'daily', 'wallet', 'settings', 'settingsAt', 'seen', 'coach', 'announced', 'skins', 'pals', 'at', 'q'])
         && d.v == 2
         && d.gen is number
         && d.settingsAt is number
@@ -72,7 +72,8 @@ service cloud.firestore {
         && within(d.get('seen', {}), 300)
         && within(d.get('coach', {}), 300)
         && within(d.get('announced', {}), 50)
-        && within(d.get('skins', {}), 50);
+        && within(d.get('skins', {}), 50)
+        && within(d.get('pals', {}), 200);
     }
 
     function validFriends(d) {

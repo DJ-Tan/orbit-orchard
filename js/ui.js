@@ -74,6 +74,8 @@
     shop: '<path d="M4 9.5h16l-1.2 10.5H5.2z"/><path d="M8.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5"/>',
     friends: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.4 2.8-5.2 5.5-5.2s4.9 1.8 5.5 5.2"/><circle cx="16.6" cy="9.4" r="2.5"/><path d="M15.6 14.3c2.5-.3 4.4 1.2 4.9 4.4"/>',
     fert: '<path d="M9.5 3h5M10.5 3v4.2L6.6 13.6A5 5 0 0 0 11 21h2a5 5 0 0 0 4.4-7.4L13.5 7.2V3"/><path d="M7.6 14.5h8.8"/>',
+    swap: '<path d="M4 8.5h14.5M15 5l3.5 3.5L15 12M20 15.5H5.5M9 12l-3.5 3.5L9 19"/>',
+    rosette: '<circle cx="12" cy="9" r="5.6"/><circle cx="12" cy="9" r="2.2"/><path d="M8.8 13.6L7 21l5-2.6 5 2.6-1.8-7.4"/>',
     badge: '<circle cx="12" cy="12" r="9"/><path d="M8 9l4 3 4-2M12 12l-1 5"/><circle cx="8" cy="9" r=".9" fill="currentColor"/><circle cx="16" cy="10" r=".9" fill="currentColor"/><circle cx="11" cy="17" r=".9" fill="currentColor"/>'
   };
   const ic = (n, cls) => `<svg class="i${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ""}</svg>`;
@@ -94,7 +96,7 @@
 
   function freshSave() {
     return {
-      v: 2, levels: {}, ach: {}, flora: {}, seen: {}, fails: {}, coach: {}, announced: {}, skins: { nocturne: 1 },
+      v: 2, levels: {}, ach: {}, flora: {}, seen: {}, fails: {}, coach: {}, announced: {}, skins: { nocturne: 1 }, pals: {},
       stats: { sown: 0, plants: 0, pollen: 0, playMs: 0, wins: 0, losses: 0, burn: 0, crash: 0, swallow: 0, bounce: 0, warp: 0, boost: 0, shield: 0, lost: 0, zen: 0, daily: 0, lastSeed: 0, stubborn: 0 },
       settings: Object.assign({}, DEFAULT_SETTINGS),
       daily: { last: null, streak: 0, best: 0, days: {} },
@@ -240,42 +242,103 @@
     const base = Math.min(a.nectar, NECTAR.ach);
     return earn("ach:" + a.id, base) + (a.nectar > base ? earn("tro:" + a.id, a.nectar - base) : 0);
   }
+  const ACH_CATS = [
+    { id: "journey", name: "Journey", icon: "map" },
+    { id: "mastery", name: "Mastery", icon: "target" },
+    { id: "physics", name: "Sky physics", icon: "orbit" },
+    { id: "daily", name: "Daily & Zen", icon: "calendar" },
+    { id: "collection", name: "Collection", icon: "pot" },
+    { id: "friends", name: "Friends", icon: "friends" }
+  ];
   function buildAch() {
     ACH.length = 0;
     const tl = Math.max(1, totalLevels());
-    const add = (id, name, desc, icon, max, cur, tier, nectar) => ACH.push({ id, name, desc, icon, max, cur, tier, nectar: nectar == null ? TIER_PAY[tier] : nectar });
-    add("first-seed", "Sower", "Sow your first seed.", "seed", 1, () => S.stats.sown, "bronze", 0);
+    let cat = "";
+    const add = (id, name, desc, icon, max, cur, tier, nectar) => ACH.push({ id, name, desc, icon, max, cur, tier, cat, nectar: nectar == null ? TIER_PAY[tier] : nectar });
+    cat = "journey";
     add("first-clear", "First sprout", "Clear a plot.", "sprout", 1, (d) => d.cleared, "bronze");
-    add("three-star", "Full bloom", "Earn three stars on a plot.", "target", 1, (d) => d.three, "bronze");
     add("ten-plots", "Allotment", "Clear 10 plots.", "sprout", 10, (d) => d.cleared, "silver");
     add("fifty-plots", "Market garden", "Clear 50 plots.", "pot", 50, (d) => d.cleared, "gold");
-    add("three-25", "Green thumb", "Earn three stars on 25 plots.", "target", 25, (d) => d.three, "gold");
     add("all-plots", "Orbit orchard", "Clear every plot in the game.", "trophy", tl, (d) => d.cleared, "platinum");
     const keepers = { 1: "Meadow keeper", 2: "Frost keeper", 3: "Fold keeper", 4: "Clock keeper", 5: "Horizon keeper" };
     const worldTiers = ["silver", "gold", "gold", "gold", "platinum"];
     WORLDS.forEach((w, i) => add("world-" + w.id, keepers[w.id] || w.name + " keeper", `Clear every plot in ${w.name}.`, "planet", Math.max(1, levelsOf(w).length), () => worldCleared(w), worldTiers[i] || "gold"));
+    cat = "mastery";
+    add("three-star", "Full bloom", "Earn three stars on a plot.", "target", 1, (d) => d.three, "bronze");
+    add("three-25", "Green thumb", "Earn three stars on 25 plots.", "target", 25, (d) => d.three, "gold");
     add("perfect-world", "Constellation", "Earn every star in one world.", "sky", 1, (d) => d.perfect, "gold");
     add("golden-1", "Gilded", "Win a golden pollen badge.", "pollen", 1, (d) => d.golden, "bronze");
     add("golden-20", "Pollinator", "Win 20 golden badges.", "pollen", 20, (d) => d.golden, "gold");
     add("pollen-100", "Gold dust", "Gather 100 pollen.", "pollen", 100, () => S.stats.pollen, "silver");
+    add("last-seed", "Last seed", "Clear a plot with your final seed.", "seed", 1, () => S.stats.lastSeed, "silver");
+    add("stubborn", "Stubborn bloom", "Clear a plot after failing it three times.", "restart", 1, () => S.stats.stubborn, "silver");
+    cat = "physics";
     add("burn-10", "Sunburnt", "Scorch 10 seeds on suns.", "flame", 10, () => S.stats.burn, "bronze");
     add("bounce-25", "Skater", "Bounce off ice 25 times.", "ice", 25, () => S.stats.bounce, "silver");
     add("warp-25", "Folded", "Pass through folds 25 times.", "portal", 25, () => S.stats.warp, "silver");
     add("boost-25", "Slipstream", "Pass through 25 boost gates.", "boost", 25, () => S.stats.boost, "silver");
     add("swallow", "Event horizon", "Lose a seed to a black hole.", "blackhole", 1, () => S.stats.swallow, "bronze");
-    add("last-seed", "Last seed", "Clear a plot with your final seed.", "seed", 1, () => S.stats.lastSeed, "silver");
-    add("stubborn", "Stubborn bloom", "Clear a plot after failing it three times.", "restart", 1, () => S.stats.stubborn, "silver");
+    cat = "daily";
     add("daily-1", "Sky watcher", "Finish a Daily Sky.", "calendar", 1, () => S.stats.daily, "bronze");
     add("streak-7", "Seven skies", "Reach a 7 day Daily Sky streak.", "calendar", 7, () => S.daily.best, "gold");
     add("zen-10", "Stillness", "Sow 10 Zen skies.", "zen", 10, () => S.stats.zen, "silver");
+    add("hour", "Night shift", "Garden for an hour in total.", "clock", 60, () => Math.floor(S.stats.playMs / 60000), "silver");
+    cat = "collection";
+    add("first-seed", "Sower", "Sow your first seed.", "seed", 1, () => S.stats.sown, "bronze", 0);
     add("botanist", "Botanist", "Grow all five kinds of flora.", "flower", 5, () => FLORA.filter((f) => S.flora[f.id] > 0).length, "silver");
     add("plants-100", "Glasshouse", "Grow 100 plants.", "pot", 100, () => S.stats.plants, "silver");
-    add("hour", "Night shift", "Garden for an hour in total.", "clock", 60, () => Math.floor(S.stats.playMs / 60000), "silver");
     add("skins", "Dressed up", "Try all four skins.", "palette", 4, () => SKINS.filter((s) => S.skins[s.id]).length, "bronze");
     add("almanac", "Field naturalist", "Open every page of the Almanac.", "book", ALMANAC.length, () => ALMANAC.filter((a) => almanacEarned(a.k)).length, "bronze");
+    cat = "friends";
+    add("fr-follow", "Over the fence", "Follow another gardener.", "friends", 1, (d) => d.pal.f, "bronze");
+    add("fr-card", "Good neighbours", "Open a friend's progress card. They have to follow you back.", "swap", 1, (d) => d.pal.m, "bronze");
+    add("fr-club", "Garden club", "Open the progress cards of 5 friends.", "swap", 5, (d) => d.pal.m, "gold");
+    add("fr-send", "Gauntlet", "Send a friend a challenge.", "target", 1, (d) => d.pal.c, "bronze");
+    add("fr-play", "Cross-pollinated", "Sow a challenge a friend sent you.", "play", 1, (d) => d.pal.p, "bronze");
+    add("fr-win", "Blue ribbon", "Win a challenge against a friend.", "rosette", 1, (d) => d.pal.w, "silver");
+    add("fr-win-10", "Best in show", "Win 10 challenges.", "rosette", 10, (d) => d.pal.w, "gold");
+    add("fr-rival", "Old rivals", "Beat the same friend in 3 challenges.", "friends", 3, (d) => d.pal.rival, "silver");
+  }
+  const PAL_KEY = /^(f|c|p|m:[0-9a-z]{1,7}|w:[0-9a-z]{1,7}:[a-z0-9]{6,16})$/;
+  const PAL_CAP = { m: 12, w: 60 };
+  /** Counts Friends trophy events in the save. */
+  function palTally(p) {
+    const t = { f: 0, c: 0, p: 0, m: 0, w: 0, rival: 0 }, by = {};
+    Object.keys(p || {}).forEach((k) => {
+      if (!PAL_KEY.test(k)) return;
+      const x = k.split(":");
+      t[x[0]] = x.length > 1 ? t[x[0]] + 1 : 1;
+      if (x[0] === "w") t.rival = Math.max(t.rival, by[x[1]] = (by[x[1]] || 0) + 1);
+    });
+    return t;
+  }
+  /** Keeps well-formed Friends trophy events within their caps. */
+  function cleanPals(p) {
+    const out = {}, n = { m: 0, w: 0 };
+    Object.keys(p && typeof p === "object" ? p : {}).sort().forEach((k) => {
+      const v = p[k], c = k[0];
+      if (!PAL_KEY.test(k) || typeof v !== "number" || !(v > 0) || (c in n && n[c]++ >= PAL_CAP[c])) return;
+      out[k] = v;
+    });
+    return out;
+  }
+  /** Records Friends trophy events and checks trophies. */
+  function addPals(keys) {
+    const t = palTally(S.pals);
+    let got = 0;
+    (Array.isArray(keys) ? keys : []).forEach((k) => {
+      if (typeof k !== "string" || S.pals[k] || !PAL_KEY.test(k) || (k[0] in PAL_CAP && t[k[0]] >= PAL_CAP[k[0]])) return;
+      S.pals[k] = Date.now();
+      if (k[0] in PAL_CAP) t[k[0]]++;
+      got++;
+    });
+    if (!got) return;
+    save();
+    checkAch();
+    if (screen === "hub" && tab === "trophies") rerender();
   }
   function derive() {
-    const d = { cleared: 0, three: 0, golden: 0, perfect: 0, perfects: Object.keys(S.wallet.earn).filter((k) => k.indexOf("par:") === 0).length };
+    const d = { cleared: 0, three: 0, golden: 0, perfect: 0, perfects: Object.keys(S.wallet.earn).filter((k) => k.indexOf("par:") === 0).length, pal: palTally(S.pals) };
     Object.keys(S.levels).forEach((id) => {
       const r = S.levels[id];
       if (!r || id.indexOf("daily") === 0) return;
@@ -1462,15 +1525,25 @@
 
   function renderTrophies(p) {
     const d = derive(), got = ACH.filter((a) => S.ach[a.id]).length;
-    p.innerHTML = `<div class="ph"><div><h2>Trophies</h2><p>Milestones from the garden. Progress counts across every mode.</p></div>
-      <div class="tro-sum"><b class="mono">${got}/${ACH.length}</b><div class="bar" style="width:200px"><i style="--p:${(got / ACH.length) * 100}%"></i></div></div></div>
-      <div class="trophies">${ACH.map((a) => {
-        const on = !!S.ach[a.id], v = Math.min(a.max, a.cur(d) || 0);
-        return `<div class="tro t-${a.tier}${on ? " got" : ""}"><div class="medal">${ic(a.icon)}</div><div><h3>${esc(a.name)}</h3><p>${esc(a.desc)}</p>
+    const cats = ACH_CATS.map((c) => { const L = ACH.filter((a) => a.cat === c.id); return { c, L, n: L.filter((a) => S.ach[a.id]).length }; }).filter((x) => x.L.length);
+    const fr = window.OrchardFriends && window.OrchardFriends.status ? window.OrchardFriends.status().mode : "off";
+    const frNote = fr === "ready" || fr === "connecting" ? "" : fr === "signedout" ? "Sign in to use Friends and earn these." : "Friends isn't connected here. Trophies earned elsewhere still count.";
+    const card = (a) => {
+      const on = !!S.ach[a.id], v = Math.min(a.max, a.cur(d) || 0);
+      return `<div class="tro t-${a.tier}${on ? " got" : ""}"><div class="medal">${ic(a.icon)}</div><div><h3>${esc(a.name)}</h3><p>${esc(a.desc)}</p>
           <span class="tier"><i></i>${TIER_NAME[a.tier]}${a.nectar ? ` · ${nectarAmt(a.nectar)}` : ""}</span>
           <div class="meta">${on ? `${ic("check")}<span>Earned ${new Date(S.ach[a.id]).toLocaleDateString()}</span>` : `<div class="bar"><i style="--p:${(v / a.max) * 100}%"></i></div><span class="mono">${v}/${a.max}</span>`}</div></div></div>`;
-      }).join("")}</div>`;
+    };
+    p.innerHTML = `<div class="ph"><div><h2>Trophies</h2><p>Milestones from the garden. Progress counts across every mode.</p></div>
+      <div class="tro-sum"><b class="mono">${got}/${ACH.length}</b><div class="bar" style="width:200px"><i style="--p:${(got / ACH.length) * 100}%"></i></div></div></div>
+      <nav class="tro-jump" aria-label="Trophy categories">${cats.map((x) => `<button class="tro-chip${x.n === x.L.length ? " full" : ""}" type="button" data-jump="${x.c.id}">${ic(x.c.icon)}<span>${esc(x.c.name)}</span><b class="mono">${x.n}/${x.L.length}</b></button>`).join("")}</nav>
+      ${cats.map((x) => `<section class="tro-cat" id="tro-${x.c.id}" aria-labelledby="troh-${x.c.id}"><h3 class="sec-h tro-h" id="troh-${x.c.id}">${ic(x.c.icon)}<span>${esc(x.c.name)}</span><b class="mono">${x.n}/${x.L.length}</b></h3>
+        ${x.c.id === "friends" && frNote ? `<p class="muted small tro-note">${ic("friends")}${esc(frNote)}</p>` : ""}<div class="trophies">${x.L.map(card).join("")}</div></section>`).join("")}`;
     $$(".meta svg.i", p).forEach((s) => { s.style.width = "14px"; s.style.height = "14px"; });
+    p.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-jump]"), sec = b && $("#tro-" + b.dataset.jump, p);
+      if (sec) sec.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
+    });
   }
 
   const TOGGLES = [
@@ -2049,7 +2122,7 @@
       try { d = JSON.parse(rd.result); } catch (e) { d = null; }
       if (!d || d.format !== "orbit-orchard-save" || !d.save || typeof d.save !== "object" || Array.isArray(d.save) || !window.OrchardCloud) { note("That isn't an Orbit Orchard save file", "bad"); return; }
       const C = window.OrchardCloud;
-      const w = Object.assign({}, d.save, { gen: S.sync.gen || 0, wallet: cleanWallet(d.save.wallet) });
+      const w = Object.assign({}, d.save, { gen: S.sync.gen || 0, wallet: cleanWallet(d.save.wallet), pals: cleanPals(d.save.pals) });
       const stars0 = WORLDS.reduce((n, x) => n + worldStars(x), 0), nec0 = nectar();
       adoptSave(C.fromWire(C.merge(C.toWire(S), w), S));
       const ds = WORLDS.reduce((n, x) => n + worldStars(x), 0) - stars0, dn = nectar() - nec0;
@@ -2733,7 +2806,7 @@
     if (window.OrchardCloud) cloud = window.OrchardCloud.start({ backend: web, minGap: web ? () => (web.meter.slow() ? WEB_SLOW : WEB_GAP) : 0, get: () => S, replace: adoptSave, onStatus: (st) => { cloudSt = web ? web.view(st) : st; refreshCloudUi(); if (st.mode !== "connecting" && st.mode !== "saving") frostCheck(); } });
     if (web) web.on(onWeb);
     if (window.OrchardFriends) window.OrchardFriends.init({
-      get: () => S, worlds: () => WORLDS, levelsOf, ach: () => ACH, liveStreak, nectar, dayKey, DIFF, CHAL_PAY, CHAL_CAP,
+      get: () => S, worlds: () => WORLDS, levelsOf, ach: () => ACH, pals: addPals, liveStreak, nectar, dayKey, DIFF, CHAL_PAY, CHAL_CAP,
       ic, esc, miniStars, sfx, note, nectarPop, openModal, confirmModal, startChallenge, quitToMenu,
       inGame: () => screen === "game", cloudRetry: () => { if (cloud) cloud.syncNow(); }, web: web ? { signIn: webSignIn, glogo: GLOGO } : null, earn: (k, a) => { const n = earn(k, a); if (n) { save(true); refreshChips(); } return n; }
     });

@@ -1,5 +1,5 @@
 #!/bin/sh
-# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
+# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|trophies|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
 cd "$(dirname "$0")"
 mkdir -p shots/dl
 PORT=${WPORT:-8771}
@@ -40,6 +40,11 @@ case "$1" in shots|all)
   ff title-out-400 400x800 "$BASE/site/index.html?emu=1&shot=title-out"
   ff journey-out-1280 1280x800 "$BASE/site/index.html?emu=1&shot=journey-out"
   ff journey-out-400 400x800 "$BASE/site/index.html?emu=1&shot=journey-out"
+  ;;
+esac
+case "$1" in trophies)
+  ff trophies-out-1280 1280x800 "$BASE/site/index.html?emu=1&shot=trophies-out&scroll=%23tro-friends"
+  ff trophies-out-400 400x800 "$BASE/site/index.html?emu=1&shot=trophies-out&scroll=%23tro-friends"
   ;;
 esac
 case "$1" in shots|cards|all)

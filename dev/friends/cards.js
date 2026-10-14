@@ -52,6 +52,9 @@
     log("  " + uid + " follows=" + JSON.stringify(Object.keys(F.fr.f).filter(function (k) { return !F.fr.f[k].del; })) + " keysWait=" + F.keysWait + " pubs=" + Object.keys(F.pubs) + " card=" + JSON.stringify({ to: F.card.to, exists: F.card.exists, timer: !!F.card.timer, busy: F.card.busy, at: F.card.at }) + " cards=" + JSON.stringify(Object.keys(F.cards).map(function (k) { return k + ":" + F.cards[k].st; })) + " key=" + !!F.key + " mode=" + w.OrchardFriends.status().mode);
   };
   var LOCK = /Hasn't added you back/, NONE = /Not sharing their progress/;
+  var sv = function (u) { try { return JSON.parse(localStorage.getItem("orbit-orchard-v2@" + u)) || {}; } catch (e) { return {}; } };
+  var mutuals = function (u) { return Object.keys(sv(u).pals || {}).filter(function (k) { return /^m:/.test(k); }).length; };
+  var got = function (u, id) { return !!(sv(u).ach || {})[id]; };
   var v1 = function (id) { return { v: 1, u: id, day: "20261011", stars: 500, cleared: 99, worlds: 3, golden: 9, streak: 4, best: 4, trophies: 2, tiers: {}, ws: [], wc: [] }; };
 
   try {
@@ -73,6 +76,8 @@
     ok(/Shared with 1 person you follow/.test($(B, "#frCard").textContent), "B's status line says who can see it: " + $(B, "#frCard .fr-who .muted").textContent);
 
     ok(await waitFor(function () { return LOCK.test(line(C, "u_bob")) && !shown(C, "u_bob"); }), "one-way: C follows B, B doesn't follow C, so C sees '" + line(C, "u_bob") + "' and no stats");
+    ok(await waitFor(function () { return got("u_alice", "fr-card") && got("u_bob", "fr-card") && mutuals("u_alice") === 1 && mutuals("u_bob") === 1; }), "trophies: A and B each earn Good neighbours with one card on record");
+    ok(got("u_cara", "fr-follow") && !got("u_cara", "fr-card") && !mutuals("u_cara"), "trophies: C's one-way follow earns Over the fence but not Good neighbours");
 
     var X = A.OrchardFriends.cx, raw = (await (await C.claude.use("db")).doc("cards/u_bob").get()).data(), txt = JSON.stringify(raw);
     var pubB = (await (await C.claude.use("db")).doc("keys/u_bob").get()).data();
@@ -124,9 +129,14 @@
     patch({ "cards/u_dev": v1("u_dev") });
 
     drop("u_cara");
-    patch({ "cards/u_cara": v1("u_cara") });
+    var fs = store()["data/users/u_cara/friends"];
+    fs.f.u_cara = { at: Date.now() };
+    patch({ "cards/u_cara": v1("u_cara"), "data/users/u_cara/friends": fs });
     C = await frame("u_cara");
     await hub(C);
+    var selfSt = await waitFor(function () { var c = C.OrchardFriends._state.cards.u_cara; return c && c.st !== "none" && c.st; }, 6000);
+    await sleep(800);
+    ok(!got("u_cara", "fr-card") && !mutuals("u_cara"), "trophies: C following its own account (its card reads '" + selfSt + "') earns no Good neighbours");
     ok(await waitFor(function () { var c = store()["cards/u_cara"]; return c && c.v === 2 && !/stars/.test(JSON.stringify(c)); }), "C's own v1 card is replaced by a v2 card on load (sharing on)");
     drop("u_cara");
     var fc = store()["data/users/u_cara/friends"];
@@ -155,6 +165,7 @@
     await hub(A);
     await waitFor(function () { var c = A.OrchardFriends._state.card; return c.rs != null && !c.timer && !c.busy; });
     ok(store()["cards/u_alice"].at === atA && A.OrchardFriends._state.card.rs != null, "reloading A with an unchanged card verifies it instead of rewriting it");
+    ok(await waitFor(function () { return got("u_alice", "fr-card") && mutuals("u_alice") === 1; }) && !Object.keys(A.OrchardFriends._state.cards).some(function (id) { return A.OrchardFriends._state.cards[id].st === "ok"; }), "trophies: with no card readable now, A's reset local save gets Good neighbours and its card record back from the cloud save");
 
     var all = errs.concat.apply(errs, ["u_alice", "u_bob", "u_cara", "u_dev"].map(function (u) { return W[u] ? W[u].__errs || [] : []; }));
     ok(all.length === 0, "no console errors in any frame" + (all.length ? ": " + all.join(" | ") : ""));

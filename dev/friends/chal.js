@@ -69,6 +69,9 @@
   var earned = function (u) { var e = JSON.parse(localStorage.getItem("orbit-orchard-v2@" + u)).wallet.earn; return Object.keys(e).filter(function (k) { return /^chal:/.test(k); }); };
   var today = (function () { var d = new Date(); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); })();
   var IDS = /"u_[a-z]+"/g;
+  var sv = function (u) { try { return JSON.parse(localStorage.getItem("orbit-orchard-v2@" + u)) || {}; } catch (e) { return {}; } };
+  var wins = function (u) { return Object.keys(sv(u).pals || {}).filter(function (k) { return /^w:/.test(k); }); };
+  var has = function (u, ids) { var a = sv(u).ach || {}; return ids.every(function (id) { return !!a[id]; }); };
 
   try {
     localStorage.setItem("oo-mock-db", "{}");
@@ -99,6 +102,8 @@
     ok(await waitFor(function () { return hist(B).some(function (t) { return /You won/.test(t); }); }), "B's history says 'You won'");
     await sleep(500);
     ok(earned("u_alice").join() === "chal:" + today + ":1" && earned("u_bob").join() === "chal:" + today + ":1", "each side earned challenge nectar exactly once: A " + earned("u_alice") + ", B " + earned("u_bob"));
+    ok(await waitFor(function () { return has("u_bob", ["fr-follow", "fr-play", "fr-win"]) && wins("u_bob").length === 1; }), "trophies: B earns Over the fence, Cross-pollinated and Blue ribbon with one recorded win " + wins("u_bob"));
+    ok(await waitFor(function () { return has("u_alice", ["fr-follow", "fr-send"]); }) && !has("u_alice", ["fr-win"]) && !has("u_alice", ["fr-play"]) && !wins("u_alice").length, "trophies: A earns Gauntlet but neither Blue ribbon for the loss nor Cross-pollinated for its own sky");
 
     var dbC = await C.claude.use("db"), rawA = (await dbC.doc("chal/u_alice").get()).data(), rawB = (await dbC.doc("chal/u_bob").get()).data();
     var txt = JSON.stringify([rawA, rawB]);
@@ -133,6 +138,8 @@
     patch({ "data/users/u_alice/chal": d });
     ok(await waitFor(function () { var h = hist(A).join("|"); return /You won \(walkover\)/.test(h) && /Expired/.test(h); }), "after expiry A's history shows a walkover win and an expired sky");
     ok(await waitFor(function () { var h = hist(B).join("|"); return /They won \(walkover\)/.test(h) && /Expired/.test(h) && !$(B, "[data-c=play]"); }), "B's history shows the walkover loss and the expired sky, with nothing left to play");
+    await sleep(800);
+    ok(!has("u_alice", ["fr-win"]) && !wins("u_alice").length && wins("u_bob").length === 1, "trophies: A's walkover win records no win and earns no Blue ribbon");
 
     ok(await newChal(A, "u_bob", false), "A sends B one more blind challenge");
     ok(await waitFor(function () { return $(B, "[data-c=play]"); }), "B sees it");

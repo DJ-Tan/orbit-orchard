@@ -137,6 +137,7 @@
         friends: S ? Object.keys(S.fr.f).filter((k) => !S.fr.f[k].del) : [], cards: S ? Object.keys(S.cards).reduce((o, k) => { o[k] = S.cards[k].st; return o; }, {}) : {},
         rows: $$(".fr-row").map((r) => ({ id: r.dataset.id, text: txt(r) })), chal: txt($("#frChal")), hist: $$(".fr-hi").map(txt), card: txt($("#frCard")), body: txt($("#frBody")),
         note: txt($("#frNote")), badge: ($("#tab-friends .fr-badge") || {}).textContent || "", search: !!$("#frQ"), codeIn: !!$("#frCodeIn"),
+        tro: Object.keys((local() || {}).ach || {}).filter((k) => /^fr-/.test(k)).sort(), wins: Object.keys((local() || {}).pals || {}).filter((k) => /^w:/.test(k)).length,
         signBtn: !!$("#frBody [data-f=signin]"), chalPay: Object.keys(earn).filter((k) => /^chal:/.test(k)).map((k) => k + "=" + earn[k]),
         items: S && S.items ? Object.keys(S.items).length : 0, sent: S && S.sent ? Object.keys(S.sent.s).length : 0, cardTo: S && S.card.to ? S.card.to.slice() : [],
         tabs: T.state().tabs, errs: window.__errs.slice(), notes: notes.slice(-6),
@@ -259,6 +260,7 @@
     if (/-rest$/.test(name)) { await T.signIn(who); await waitFor(() => OrchardWeb.meter.state() && OrchardWeb.meter.state().asleep, 15000); await sleep(500); }
     if (/^settings/.test(name)) await T.settings();
     if (/^journey/.test(name)) await T.enterHub();
+    if (/^trophies/.test(name)) { await T.enterHub(); key(String(T.state().tabs.indexOf("trophies") + 1)); }
     if (/-in$/.test(name)) await T.waitCloud("synced");
     if (/^friends/.test(name)) {
       await T.frTab();

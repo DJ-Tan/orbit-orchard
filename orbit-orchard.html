@@ -355,6 +355,17 @@
   .tro .meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--faint); }
   .tro .meta .bar { flex: 1; height: 6px; }
   .tro:not(.got) h3 { color: var(--dim); }
+  .tro-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: -10px 0 0; }
+  .tro-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 13px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--surface); color: var(--dim); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: color .15s, border-color .15s; }
+  .tro-chip svg.i { width: 16px; height: 16px; flex: none; color: var(--gold); }
+  .tro-chip b { font-size: 13px; font-weight: 600; color: var(--faint); }
+  .tro-chip.full b { color: var(--gold); }
+  @media (hover: hover) and (pointer: fine) { .tro-chip:hover { color: var(--text); border-color: var(--dim); } }
+  .tro-cat { scroll-margin-top: 12px; }
+  .tro-h { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; padding-bottom: 10px; border-bottom: 2px solid var(--line); }
+  .tro-h b { margin-left: auto; font-size: 15px; font-weight: 600; color: var(--dim); }
+  .tro-note { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; }
+  .tro-note svg.i { width: 16px; height: 16px; flex: none; }
 
   .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px 32px; }
   .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
@@ -549,6 +560,12 @@
     .rfacts dd { font-size: 17px; }
     #achs { left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 84px); }
     .trophies { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .tro-jump { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: -14px; }
+    .tro-chip { display: grid; grid-template-columns: auto 1fr; gap: 3px 6px; min-width: 0; padding: 7px 10px; border-radius: 14px; font-size: 13px; text-align: left; }
+    .tro-chip span { grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tro-chip b { justify-self: end; font-size: 12px; }
   }
   @media (max-width: 420px) {
     .hub-chips .chip.streak { display: none; }

@@ -233,3 +233,19 @@ console.log("daily replay best syncs ok");
   assert.ok(!("wo" in Old2.sync), "old device is still migrated on its own first new boot");
 }
 console.log("old-client save with Fold progress merges ok");
+
+{
+  const server = { doc: null };
+  let A = freshLocal("a"), B = freshLocal("b");
+  A.pals = { f: 10, "w:1k2b3c:abcdef1234": 11, "m:1k2b3c": 12 };
+  B.pals = { f: 20, "w:1k2b3c:abcdef1234": 21, "w:9z9z9z:zzzzzz9999": 22, "m:1k2b3c": 23 };
+  A = sync(A, server, 1); B = sync(B, server, 2); A = sync(A, server, 3); B = sync(B, server, 4);
+  for (const S of [A, B]) {
+    assert.deepStrictEqual(Object.keys(S.pals).sort(), ["f", "m:1k2b3c", "w:1k2b3c:abcdef1234", "w:9z9z9z:zzzzzz9999"], "Friends trophy events are a keyed union");
+    assert.strictEqual(Object.keys(S.pals).filter((k) => k[0] === "w").length, 2, "a win seen on both devices counts once");
+  }
+  assert.strictEqual(C.canon(server.doc.pals), C.canon(A.pals), "the cloud copy carries them");
+  const Old = C.merge(server.doc, { v: 2, gen: 0, levels: {}, ach: {}, fails: {}, stats: {}, flora: {}, daily: {}, wallet: {}, settings: {}, settingsAt: 0 });
+  assert.strictEqual(Object.keys(Old.pals).length, 4, "a save without them keeps the other side's");
+}
+console.log("Friends trophy events merge once across devices ok");

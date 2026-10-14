@@ -3,7 +3,7 @@
 
   const SYNCED = ["skin", "grid", "shake", "reducedMotion", "colorblind", "assist", "unlockAll", "trail", "fastForward"];
   const FLAGS = ["stubborn", "lastSeed"];
-  const UNIONS = ["seen", "coach", "announced", "skins"];
+  const UNIONS = ["seen", "coach", "announced", "skins", "pals"];
   const KEEP_DAYS = 60;
 
   const isObj = (v) => v != null && typeof v === "object" && !Array.isArray(v);

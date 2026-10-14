@@ -209,6 +209,30 @@ t("incoming lists only challenges to me, joined with my answers; open count", ()
   assert.strictEqual(F.openCount(outs, NOW), 1);
 });
 
+t("trophy events need another gardener, an opened card and a played win", () => {
+  const me = "u_me", h = F.palHash, card = (id) => ({ st: "ok", c: { u: id } });
+  const fr = F.cleanFriends({ f: { u_me: { at: 1 }, u_b: { at: 2 }, u_c: { at: 3 }, u_d: { at: 4, del: 1 } } });
+  const ch = (o) => chal(Object.assign({ from: "u_b", to: me }, o));
+  const mineR = (o) => rr(res(2, 0, 9), Object.assign({ by: "u_b" }, o));
+  const keys = (o) => F.palKeys(Object.assign({ me, fr, cards: {}, mine: F.cleanChal({}), inc: [], out: [], now: NOW }, o)).sort();
+  assert.deepStrictEqual(F.palKeys({ me, fr: F.cleanFriends({ f: { u_me: { at: 1 } } }), cards: { u_me: card(me) }, mine: F.cleanChal({ out: { selfchal01: { to: me, seed: 1, diff: 1, at: NOW, exp: NOW + DAY } } }), inc: [ch({ from: me, cid: "selfchal02", sr: res(5, 0, 9), rr: mineR({ by: me, cid: "selfchal02" }) })], out: [], now: NOW }), [], "my own account is never a friend, card or rival");
+  assert.deepStrictEqual(keys({}), ["f"]);
+  assert.deepStrictEqual(keys({ cards: { u_b: card("u_b"), u_c: { st: "locked" }, u_d: card("u_d"), u_x: card("u_x") } }), ["f", "m:" + h("u_b")], "only open cards of followed players count");
+  assert.deepStrictEqual(keys({ cards: { u_b: { st: "ok", c: { u: "u_c" } } } }), ["f"], "a card must belong to its row");
+  assert.deepStrictEqual(keys({ mine: F.cleanChal({ out: { sent123456: { to: "u_b", seed: 1, diff: 1, at: NOW, exp: NOW + DAY } } }) }), ["c", "f"]);
+  const won = ch({ sr: res(5, 0, 9), rr: mineR() }), lost = ch({ cid: "lost123456", sr: res(1, 0, 9), rr: mineR({ cid: "lost123456" }) });
+  assert.deepStrictEqual(keys({ inc: [won, lost] }), ["f", "p", "w:" + h("u_b") + ":abcdef1234"], "a played answer counts once and only the win scores");
+  const walk = ch({ cid: "walk123456", exp: NOW - 1, rr: mineR({ cid: "walk123456", at: NOW - DAY }) });
+  const voided = ch({ cid: "void123456", sr: res(5, 0, 9), rr: mineR({ cid: "void123456", seed: 999 }) });
+  const draw = ch({ cid: "draw123456", sr: res(2, 0, 9), rr: mineR({ cid: "draw123456" }) });
+  const declined = ch({ cid: "decl123456", sr: res(5, 0, 9), rr: rr(null, { by: "u_b", cid: "decl123456", no: 1 }) });
+  assert.deepStrictEqual(keys({ inc: [walk, voided, draw, declined] }), ["f", "p"], "walkovers, void answers, draws and declines are not wins");
+  const outWin = chal({ cid: "outw123456", from: me, to: "u_c", sr: res(2, 0, 9), rr: rr(res(4, 0, 9), { by: me, cid: "outw123456" }) });
+  const outWalk = chal({ cid: "outk123456", from: me, to: "u_c", exp: NOW - 1, sr: res(2, 0, 9, NOW - DAY) });
+  assert.deepStrictEqual(keys({ out: [outWin, outWalk] }), ["f", "w:" + h("u_c") + ":outw123456"], "my sent challenge scores only when they answered and lost");
+  assert.ok(/^[0-9a-z]{1,7}$/.test(h("u_b")) && h("u_b") === h("u_b") && h("u_b") !== h("u_c"));
+});
+
 t("challenge wire docs: v2 only, opaque entries, no plaintext fields kept", () => {
   const ent = { t: T16, iv: IV16, ct: "Zm9v_-", k: NOW };
   const d = { v: 2, u: "u_a", at: NOW, to: ["u_b"], from: ["u_c"], out: { abcdef1234: ent, "BAD ID": ent, c222222222: { t: T16, iv: IV16, ct: "x", k: 0 } }, res: { [T16]: ent, short: ent } };
