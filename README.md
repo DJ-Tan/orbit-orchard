@@ -1,99 +1,103 @@
 # Orbit Orchard
 
-A gravity-slingshot puzzle for the browser. Pull back, let go, and steer seeds around planets, suns and black holes until every patch of fertile soil in the sky has taken root.
+**Plant a garden on every planet, one slingshot at a time.**
 
-[![Orbit Orchard trailer](docs/media/trailer.gif)](docs/media/trailer.mp4)
+Pull back, let go, and watch your seed curve around rocks, whip past suns, glance off ice and slip through folds in space before it lands on fertile soil. Orbit Orchard is a gravity puzzle about the perfect throw: easy to pick up, hard to put down, and deeply satisfying when a three-star shot falls into place.
 
-▶ [Watch the full trailer (MP4)](docs/media/trailer.mp4)
+<video src="docs/media/trailer.mp4" poster="docs/media/trailer-poster.png" controls playsinline preload="metadata" width="100%">
+  <a href="docs/media/trailer.mp4"><img src="docs/media/trailer.gif" alt="Orbit Orchard trailer"></a>
+</video>
 
-## Play now
+### ▶ [Play free in your browser at orbit-orchard.web.app](https://orbit-orchard.web.app)
 
-| Where | Link | Notes |
-|---|---|---|
-| Web | **https://orbit-orchard.web.app** | Sign in with Google for cloud save and Friends. Works offline after the first visit. |
-| claude.ai artifact | **https://claude.ai/artifact/7xhNrpRWfS1SAZMM1EE776** | Cloud save and Friends work only for people in the artifact owner's organization. |
+No install, no ads. It plays with a mouse, a keyboard or a touchscreen, and works offline after your first visit.
 
-Both run the same game on desktop (mouse and keyboard) and phones (touch). To run it yourself, see [Running locally](#running-locally-and-deploying).
+## Why you'll love it
 
-## Features
-
-**Puzzles**
-- 110 hand-made plots across five worlds: Meadow Belt, Frost Reach, Clockwork Orrery, Fold Nebula and Event Horizon. Each world adds one or two new mechanics and ends in a showpiece plot.
-- Up to three stars per plot for using few seeds, plus a golden pollen badge for collecting every pollen mote.
-- Clearing 16 plots in a world opens the next one.
-
-**Daily play and side modes**
-- **Daily Sky**: one generated sky a day, the same for every player. Your first run counts for the streak and a shareable result card; replays are practice.
-- **Zen Garden**: endless seeds, no par, five difficulty levels, and a seed number you can share.
-- **Almanac**: a field guide that fills in as you meet each kind of body.
-- **Greenhouse**: nine beds that grow from what you have done (worlds cleared, golden badges, Perfect clears, Daily streak, Zen skies).
-- **Trophies**: 39 trophies from bronze to platinum, grouped into six categories: Journey, Mastery, Sky physics, Daily & Zen, Collection and Friends.
-
-**Nectar and the Market**
-- Clears, stars, golden badges, Perfect clears, trophies, the Daily Sky, Zen skies and daily visits all earn nectar.
-- Spend it in the Market on the **Oracle** (a Glimpse of a plot's opening shot, or its full clear), spare seeds, frost charms that protect a Daily streak, seed trails, Greenhouse decorations, glazed pots, fertilizer, a title-screen banner and constellation badges.
-
-**Look, sound and comfort**
-- Four skins: Nocturne, Daylight, Synthwave and Inkwell. Every world has its own palette, ambience and generative music.
-- Accessibility settings: colorblind markers, reduced motion, screen shake on or off, and a trajectory assist that draws a longer preview line.
-- A fast-forward button in the HUD, an auto fast-forward setting, and a gravity lattice that shows how space bends.
-- On tall screens the field rotates to portrait so seeds fly up the screen.
-
-**Online**
-- Cloud save that merges progress between devices.
-- Friends: follow people by friend code, read each other's encrypted progress cards, and send challenge skies where the fewest seeds wins.
+- **110 hand-made plots across five worlds.** Each world teaches a new trick and ends in a showpiece puzzle.
+- **One-more-try physics.** Every planet pulls on your seed, so a small change in aim can open a completely new route.
+- **Room to master it.** Clear a plot, then go back for three stars, a Perfect clear and every grain of golden pollen.
+- **Something new every day.** The Daily Sky is the same puzzle for every player, with a streak to keep alive and a result card to share.
+- **Endless when you want to unwind.** Zen Garden generates fresh skies forever, with no par and no pressure.
+- **Play with friends.** Send a friend a challenge sky and see who clears it in fewer seeds.
+- **A garden that grows with you.** Earn nectar, decorate your Greenhouse, collect 39 trophies and unlock seed trails.
+- **Made to look and sound good.** Four visual skins, generative music for every world, and accessibility options such as colorblind markers and reduced motion.
 
 ## How to play
 
-Every plot has one or more **soil** planets (green, ringed). Land a seed on each one, and on hungry soil land as many as its ring segments ask for. The dotted preview line shows where the seed will go for the first second or so of flight, and later worlds shorten it.
+### Your first plot
+
+1. **Find the soil.** Green, ringed planets are fertile soil. Your goal is to plant a seed on every one of them.
+2. **Pull back.** Press anywhere on the field and drag away from where you want to throw, like a slingshot. The further you pull, the harder the throw.
+3. **Read the preview.** A dotted line shows the first part of the flight. Planets bend it, so watch where it ends, not just where it starts.
+4. **Let go.** Release to sow the seed. If it lands on soil, it takes root. If it misses, try again with the next seed in your pouch.
+5. **Clear the sky.** When every patch of soil has a plant, the plot is cleared and you earn stars.
+
+Some soil is **hungry**: the segments around its ring show how many seeds it wants.
 
 ### Controls
 
 | Action | Mouse / touch | Keyboard |
 |---|---|---|
-| Aim and set power | Drag anywhere and pull back like a slingshot. Drag back to the start point to cancel. | <kbd>←</kbd> <kbd>→</kbd> aim, <kbd>↑</kbd> <kbd>↓</kbd> power, hold <kbd>Shift</kbd> for fine steps |
+| Aim and set power | Drag and pull back. Drag back to the start point to cancel. | <kbd>←</kbd> <kbd>→</kbd> aim, <kbd>↑</kbd> <kbd>↓</kbd> power, hold <kbd>Shift</kbd> for fine steps |
 | Sow (launch) | Release the drag | <kbd>Space</kbd> or <kbd>Enter</kbd> |
-| Fast-forward a flight | Tap the field while a seed flies, or use the HUD button | Hold <kbd>F</kbd> |
-| Gravity lattice | Settings | <kbd>G</kbd> |
+| Fast-forward a flight | Tap the field while a seed flies | Hold <kbd>F</kbd> |
+| Show the gravity lattice | Settings | <kbd>G</kbd> |
 | Replant / next plot | Replant button / results card | <kbd>R</kbd> / <kbd>N</kbd> after a win |
-| Pause | HUD button | <kbd>Esc</kbd> or <kbd>P</kbd> |
+| Pause | Pause button | <kbd>Esc</kbd> or <kbd>P</kbd> |
 | Mute | Speaker button | <kbd>M</kbd> |
 | Snap aim to the Oracle's guide | | <kbd>H</kbd> |
 | Switch menu tabs | Tab bar | <kbd>1</kbd> to <kbd>9</kbd> |
 
-The same list is under **Settings > Controls** in the game.
+The same list is in the game under **Settings > Controls**.
 
-### Stars, Perfect and golden pollen
+### Stars, Perfect clears and golden pollen
 
-- Each plot has a **par**, the fewest seeds that can clear it. Clear it in few enough seeds for three stars, a few more for two, or anywhere within your seed pouch for one. The leeway over par shrinks as a world goes on.
-- Clearing a plot in exactly par seeds, without the Oracle's guides, earns a **Perfect** mark.
-- Gather every golden **pollen** mote in a single attempt for the **golden** badge. Pollen you collect stays collected for the rest of that attempt, so it can take several seeds.
-- A clear made with Oracle guides tops out at two stars. The trajectory assist never caps stars; it only tags the result "Assist".
+- Every plot has a **par**: the fewest seeds that can clear it. Clear it in few enough seeds for **three stars**, a few more for two, or anywhere within your seed pouch for one.
+- Clear a plot in exactly par seeds without help from the Oracle for a **Perfect** mark.
+- Fly through every golden **pollen** mote in a single attempt for the **golden badge**. Pollen stays collected for the rest of that attempt, so you can gather it over several seeds.
+- Clearing **16 plots** in a world opens the next one.
 
-### What's in the sky
+### The five worlds
 
-| Body | First seen | What it does |
+Each world adds new things to the sky. The Almanac tab fills in as you meet each one.
+
+| World | What's new | How to use it |
 |---|---|---|
-| Soil | World 1 | Land a seed anywhere on it to plant. Hungry soil wants more than one seed. |
-| Barren rock | World 1 | Nothing grows; its pull still bends your shot. |
-| Sun | World 1 | Heavy pull. Whip around it for speed, but touching it scorches the seed. |
-| Pollen | World 1 | Optional collectibles for the golden badge. |
-| Ice | World 2 | Seeds glance off and keep flying, so you can bank shots. |
-| Shield | World 2 | An arc around soil that only lets seeds through its gap. Later ones turn. |
-| Orbit | World 3 | Moons circle their parent while you aim, so timing matters. |
-| Fold | World 4 | Two joined rings. Enter one, leave the other at the same speed and heading. |
-| Wind | World 4 | A band of steady current that pushes anything flying through it. |
-| Boost gate | World 4 | Speeds a seed up; some gates also turn it. |
-| Black hole | World 5 | Tiny, with a pull that reaches across the plot. Nothing comes back out. |
-| Repulsor | World 5 | Pushes seeds away. Touching one still ends the flight. |
+| **Meadow Belt** | Soil, barren rock, suns, pollen | Rocks grow nothing, but their pull still bends your shot. A close pass around a sun adds speed, but touching it scorches the seed. |
+| **Frost Reach** | Ice, shields | Seeds glance off ice and keep flying, so you can bank shots around corners. Shields guard soil, and only their gap lets a seed through. |
+| **Clockwork Orrery** | Moons on orbits, turning shields | Moons keep circling while you aim. Time the throw rather than forcing the angle. |
+| **Fold Nebula** | Folds, wind, boost gates | Enter one ring of a fold and leave the other at the same speed and heading. Wind bands push anything flying through them. Boost gates speed a seed up, and some also turn it. |
+| **Event Horizon** | Black holes, repulsors | A black hole's pull reaches across the whole plot, and nothing comes back out. Repulsors push seeds away, but touching one still ends the flight. |
 
 ### Tips
 
-- Watch where the preview line ends, not just where it starts. A soft pull near the end can still bend a shot onto soil.
-- A close pass around a sun adds a lot of speed. Just don't touch it.
-- On Clockwork plots the moons keep moving while you aim. Wait for the gap rather than forcing the angle.
-- Turn on the gravity lattice (<kbd>G</kbd>) to see which bodies dominate a region of the sky.
-- Stuck? Open the pause menu and buy a Glimpse. It plays the opening shot and leaves an aim guide behind.
+- Turn on the gravity lattice (<kbd>G</kbd>) to see which bodies rule each part of the sky.
+- A shot that looks wrong at the start can still curve onto soil at the end. Follow the whole preview line.
+- Ice is your friend in Frost Reach. Many plots are easiest as a bank shot.
+- In the Clockwork Orrery, wait for the gap instead of chasing the moon.
+- Stuck? Pause and spend nectar on an **Oracle Glimpse**. It plays the opening shot and leaves an aim guide behind. A clear made with guides tops out at two stars, so you can come back for three later.
+- If you want a longer preview line, turn on the trajectory assist in Settings. It never costs you stars.
+
+## Beyond the Journey
+
+- **Daily Sky:** one new sky a day, the same for everyone. Your first run counts for your streak and gives you a result card to share; replays are practice. A frost charm from the Market protects your streak if you miss a day.
+- **Zen Garden:** endless generated skies at five difficulty levels. Share a sky's seed number so a friend can play the same one.
+- **Nectar and the Market:** clears, stars, badges, trophies and daily visits all earn nectar. Spend it on Oracle hints, spare seeds, seed trails, Greenhouse decorations, glazed pots, a title-screen banner and constellation badges.
+- **Greenhouse:** nine beds that grow as you clear worlds, earn golden badges, keep streaks and finish Zen skies.
+- **Trophies:** 39 trophies from bronze to platinum, in six categories: Journey, Mastery, Sky physics, Daily & Zen, Collection and Friends.
+- **Skins:** switch between Nocturne, Daylight, Synthwave and Inkwell at any time.
+
+## Playing with friends
+
+Sign in with Google to back up your progress and play with friends.
+
+1. Open the **Friends** tab and copy your six-character **friend code**.
+2. Send it to a friend, and enter theirs under **Add a friend**.
+3. Switch on **Share my progress** to swap progress cards and compare your stars, worlds and trophies.
+4. Press **Challenge** to send a friend a sky. You both play the same sky; the fewest seeds wins, then more pollen, then the faster time. Challenges last seven days and pay a little nectar.
+
+Progress cards and challenges are end-to-end encrypted, so only the friends you choose can read them.
 
 ## Screenshots
 
@@ -119,56 +123,17 @@ The same list is under **Settings > Controls** in the game.
     <td><img src="docs/media/screens/friends.jpg" alt="Friends tab with incoming challenges and your progress card"><br><sub>Friends: challenges and your progress card</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/media/screens/friends-cards.jpg" alt="Friend list with a friend's decrypted progress card"><br><sub>A friend's progress card, compared world by world</sub></td>
+    <td><img src="docs/media/screens/friends-cards.jpg" alt="Friend list with a friend's progress card"><br><sub>A friend's progress card, compared world by world</sub></td>
     <td align="center"><img src="docs/media/screens/mobile.jpg" width="200" alt="Phone layout with the field rotated to portrait"><br><sub>On a phone the field turns to portrait</sub></td>
   </tr>
 </table>
 
-## Friends and cloud save
+## Credits
 
-**Cloud save.** The game always saves in the browser first and syncs in the background, so it keeps working offline. On claude.ai the save goes to your private storage in the artifact. On the web it goes to your Google account in Cloud Firestore. Signing in merges this device's progress with the cloud copy: best results win, and nectar and trophies from both sides are kept.
+Orbit Orchard was designed and built with help from [Claude](https://claude.ai), Anthropic's AI assistant. Claude helped shape the game's design, from the worlds, puzzles and progression to the interface, music and this README's trailer.
 
-**Friends.** Add someone with their six-character friend code. Following is one-way, up to 60 people.
-- **Progress cards** show stars, plots, worlds, golden badges, Daily streak and trophies, plus nectar only if you switch that on. Sharing is off until you turn it on, and turning it off deletes your card.
-- **Challenges** send a friend a generated sky. You both play the same sky; fewest seeds wins, then more pollen, then less time. A challenge lasts seven days, and recorded results pay a little nectar.
+Type is set in [Unbounded](https://fonts.google.com/specimen/Unbounded) and [Atkinson Hyperlegible](https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next), both under the SIL Open Font License. Cloud save and Friends run on [Firebase](https://firebase.google.com). All artwork, music and sound effects are made by the game's own code.
 
-**Privacy.**
-- Cards and challenges are end-to-end encrypted (ECDH P-256 key agreement, AES-GCM). Only the people you follow can open your card, and only the two players in a challenge can read it. Shared documents hold only ciphertext; your own friend list and challenge history stay in your private storage.
-- Each friend has a safety code you can compare to confirm their key. If a friend's key changes, the game pauses sharing with them until you accept the new one.
-- On the web build your Google display name is shown to friends by default. You can switch "Show my Google name to friends" off, and friends then see "Gardener" plus your friend code.
-- On the web build the Firebase project owner can see who follows whom, and when cards were written, but not what is in them.
+---
 
-**Cloud limits on the web.** To stay within Firebase's free quota, each player gets a daily cloud allowance. If it runs out, the game keeps saving on the device and syncs again after midnight Pacific time. The numbers are in [firebase/SETUP.md](firebase/SETUP.md#daily-allowance).
-
-## Running locally and deploying
-
-- **Quick look:** open `orbit-orchard.html` in a browser. It is an HTML fragment written for claude.ai artifacts, so for a standards-mode page, wrap it first:
-
-  ```sh
-  (echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>'; cat orbit-orchard.html; echo '</body></html>') > dev/preview.html
-  ```
-
-  Progress stays in the browser's local storage. Cloud save and Friends need claude.ai or the Firebase build.
-- **Your own Firebase site:** `sh firebase/build.sh` writes the site to `firebase/public/`. Creating the project, filling in `js/firebase-config.js`, deploying and running the emulators are covered in [firebase/SETUP.md](firebase/SETUP.md).
-
-## Project layout
-
-```
-orbit-orchard.html     page shell, styles and script list (the claude.ai artifact)
-js/sim.js              deterministic physics shared by the game and the solver
-js/levels/w1.js…w5.js  the five worlds and their 110 plots
-js/game.js             canvas renderer, input, gameplay, Zen and Daily sky generator
-js/ui.js               menus, HUD, progression, nectar, trophies, saving, settings
-js/audio.js            sound effects and generative music (WebAudio)
-js/solutions.js        Oracle solutions for every plot
-js/cloud.js            cloud save sync and merge
-js/friends.js          Friends, progress cards and challenges
-js/*-web.js, js/backend-firebase.js, css/web.css   web build additions
-firebase/              build script, Firestore rules, service worker, SETUP.md
-tools/                 level solver and solution checks
-dev/                   test harnesses and screenshot scripts (dev/readme makes the shots above)
-```
-
-## Tests
-
-Node test suites, browser harnesses and the Firestore rules tests are listed in [CONTRACT.md](CONTRACT.md), which also documents the game's APIs and data formats.
+<sub>Developers: building and hosting your own copy is covered in [firebase/SETUP.md](firebase/SETUP.md), and the game's APIs, data formats and tests are in [CONTRACT.md](CONTRACT.md).</sub>
