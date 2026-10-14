@@ -12,7 +12,7 @@
     { path: "keys", read: "interact", write: "owner" },
     { path: "keys/{self}", write: "interact" },
     { path: "feedback", read: "owner", write: "owner" },
-    { path: "feedback/{self}", write: "interact" }
+    { path: "feedback/{self}", read: "interact", write: "interact" }
   ];
   var CAPABILITIES = { db: { rules: RULES }, downloads: true, user: { scopes: ["profile"] } };
   var RANK = { view: 0, interact: 1, admin: 2, owner: 3 };

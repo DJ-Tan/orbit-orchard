@@ -361,10 +361,10 @@ it is absent on claude.ai, so claude.ai docs are unchanged.
 
 Capabilities: `db` with the rules below, `downloads`, `user` with `scopes: ["profile"]`. The root rule lets only the owner write outside
 the game's paths; `data/users/{self}` keeps each player's own subtree writable at Contributor. Every other `{self}` prefix rule sets read and write;
-never add a rule at `data/users`, since it would open players' private subtrees. `feedback` (read and write owner) with `feedback/{self}` (write
+never add a rule at `data/users`, since it would open players' private subtrees. `feedback` (read and write owner) with `feedback/{self}` (read and write
 interact) is the Feedback card's (see "Feedback").
 The complete declaration:
-`{"db":{"rules":[{"path":"","read":"view","write":"owner"},{"path":"data/users/{self}","write":"interact"},{"path":"cards","read":"interact","write":"owner"},{"path":"cards/{self}","write":"interact"},{"path":"codes","read":"interact","write":"owner"},{"path":"codes/{self}","write":"interact"},{"path":"chal","read":"interact","write":"owner"},{"path":"chal/{self}","write":"interact"},{"path":"keys","read":"interact","write":"owner"},{"path":"keys/{self}","write":"interact"},{"path":"feedback","read":"owner","write":"owner"},{"path":"feedback/{self}","write":"interact"}]},"downloads":true,"user":{"scopes":["profile"]}}`
+`{"db":{"rules":[{"path":"","read":"view","write":"owner"},{"path":"data/users/{self}","write":"interact"},{"path":"cards","read":"interact","write":"owner"},{"path":"cards/{self}","write":"interact"},{"path":"codes","read":"interact","write":"owner"},{"path":"codes/{self}","write":"interact"},{"path":"chal","read":"interact","write":"owner"},{"path":"chal/{self}","write":"interact"},{"path":"keys","read":"interact","write":"owner"},{"path":"keys/{self}","write":"interact"},{"path":"feedback","read":"owner","write":"owner"},{"path":"feedback/{self}","read":"interact","write":"interact"}]},"downloads":true,"user":{"scopes":["profile"]}}`
 
 | path | read | write | body |
 |---|---|---|---|
@@ -376,7 +376,7 @@ The complete declaration:
 | `codes/<id>` (same shape of rules) | interact | self | `{ c, u }`, a random 6-char code from `23456789ABCDEFGHJKMNPQRSTUVWXYZ` |
 | `data/users/<id>/chal` (private, default rule) | self | self | my challenge history in plain v1 shape: `{ v, to[], from[], out: { <cid>: { to, seed, diff, at, exp, rnd?, r? } }, res: { "<sender>~<cid>": { by, cid, seed, diff, at, r? \| no: 1 } } }` |
 | `chal/<id>` (same shape of rules as `cards`) | interact | self | `{ v: 2, u, at, out: { <cid>: { t, iv, ct, k } }, res: { <rid>: { t, iv, ct, k } } }`, no plaintext ids, seeds or results |
-| `feedback/<id>/m/<YYYYMMDD>-<rand>` (`feedback`: read and write owner; `feedback/{self}`: write interact) | owner | self | a Feedback note, see "Feedback" |
+| `feedback/<id>/m/<YYYYMMDD>-<rand>` (`feedback`: read and write owner; `feedback/{self}`: read and write interact) | owner, self | self | a Feedback note, see "Feedback" |
 
 Friend list merge: per-id last-write-wins on `at`, a tie keeps the tombstone; tombstones pruned after 120 days; sharing and code by newest `at`.
 Following is one-way, at most 60. Everyone stores ids only; names come from `user.profiles` at render time (`name || "Someone"`).
@@ -510,14 +510,14 @@ checkbox that lists what it adds, Send, a `role="status"` line, and "Your recent
   button on the web), offline or unavailable (draft kept, Send retries), resting on the web ("Feedback is resting until 3:00 PM. Today's cloud
   allowance is used up. Your note stays here as a draft."), and on claude.ai no page access or view-only access.
 - claude.ai: `claude.use("db").doc("feedback/<id>/m/<YYYYMMDD>-<rand10>").set({ v, cat, msg, at, info? })`, `rand10` from
-  `23456789abcdefghjkmnpqrstuvwxyz`. The rules let a Contributor write only under their own `feedback/<id>/`; only the artifact owner can read,
-  so the owner reads every note with ArtifactData (`list`/`query` on `feedback/<id>/m`). Rules can't enforce the daily limit, the body shape
+  `23456789abcdefghjkmnpqrstuvwxyz`. The rules let a Contributor read and write only under their own `feedback/<id>/`; only the artifact owner can read
+  everyone's, so the owner reads every note with ArtifactData (`list`/`query` on `feedback/<id>/m`). Rules can't enforce the daily limit, the body shape
   or create-only here, so the limit is client-side and a player can overwrite or delete only their own notes.
 - Web: see "Web build (Firebase)": `feedback/<uid>/m/<day>-<n>`, create-only, checked field by field by the rules.
 
 Tests: `node dev/feedback/test-feedback.js` (sanitizer, payload, game info, ids, the claude.ai rule split, the declaration above, and that the
 rules mirror the client's lists). claude.ai browser suite: `dev/friends/run.sh fb 1400x900 fb.html FB` (frames for Alice, Bob, a view-only
-viewer, a signed-out viewer and the owner: XSS strings render as text, draft survives tab switches and reloads, 3 a day, owner-only reads).
+viewer, a signed-out viewer and the owner: XSS strings render as text, draft survives tab switches and reloads, 3 a day, players read only their own notes and the owner reads all).
 Web browser suite: `sh dev/web/run.sh feedback` (emulators running). Screenshots: `dev/friends/shot.sh NAME WxH "tab=8&fb=draft|sent|limit&skin=…"`
 and `sh dev/web/run.sh fbshots`.
 

@@ -102,8 +102,8 @@
     ok(notes("u_alice").length === 3 && $(A, "#fbMsg").value === "One more idea about pollen trails.", "forcing the button still writes nothing and keeps the draft");
 
     var dbA = await A.claude.use("db"), first = na[0].path;
-    ok(!(await dbA.doc(first).get()).exists, "Alice can't read her own note back (rule read: owner)");
-    ok((await dbA.collection("feedback/u_alice/m").get()).size === 0, "Alice can't list her notes");
+    ok((await dbA.doc(first).get()).exists, "Alice can read her own note back");
+    ok((await dbA.collection("feedback/u_alice/m").get()).size === 3, "Alice lists only her own notes");
     drop("u_alice");
 
     var B = await frame("u_bob");
