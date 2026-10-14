@@ -6,3 +6,4 @@ dev/web/site/
 dev/web/site-nosdk/
 dev/integ/preview.html
 .claude/settings.local.json
+js/firebase-config.js
