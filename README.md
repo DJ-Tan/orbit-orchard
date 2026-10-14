@@ -87,6 +87,7 @@ Each world adds new things to the sky. The Almanac tab fills in as you meet each
 - **Greenhouse:** nine beds that grow as you clear worlds, earn golden badges, keep streaks and finish Zen skies.
 - **Trophies:** 39 trophies from bronze to platinum, in six categories: Journey, Mastery, Sky physics, Daily & Zen, Collection and Friends.
 - **Skins:** switch between Nocturne, Daylight, Synthwave and Inkwell at any time.
+- **Feedback:** found a bug or have an idea? Send the game's maker a short note from **Settings**, up to 3 a day.
 
 ## Playing with friends
 

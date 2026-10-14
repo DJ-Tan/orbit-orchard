@@ -28,7 +28,7 @@ function newServer() {
   const seated = (uid) => !!S.docs["days/" + S.day() + "/u/" + uid];
   S.allow = (p, d, uid) => {
     const cap = capOf(p);
-    if (/^(inbox|codes)\//.test(p) && !seated(uid)) return false;
+    if (/^(inbox|codes|feedback)\//.test(p) && !seated(uid)) return false;
     if (!cap) return true;
     const q = d && d.q, old = S.docs[p] && S.docs[p].q, day = S.day();
     if (!q || q.d !== day || !Number.isInteger(q.n) || q.n > cap) return false;
@@ -287,6 +287,12 @@ function game(p, gap) {
     ok(!S.docs["cards/fi/to/y"] && A.M.room("cards/fi/to/y") === 12, "a deleted card doc is known to be gone");
     await A.M.set(A.ref("codes/ABC234"), { u: "fi" });
     ok(S.docs["codes/ABC234"] && !("q" in S.docs["codes/ABC234"]), "seat-gated creates go through without q", S.docs["codes/ABC234"]);
+    const db = await A.web.use("db"), fp = "feedback/fi/m/" + d + "-0", f0 = A.M.state();
+    await db.doc(fp).set({ v: 1, u: "fi", cat: "bug", msg: "0123456789", at: 1 });
+    const f1 = A.M.state();
+    ok(S.docs[fp] && !("q" in S.docs[fp]) && f1.w - f0.w === 1 && f1.r - f0.r === 1, "a feedback note maps to feedback/<uid>/m/<day>-<n>, carries no q and counts 1 write and 1 seat read", [S.docs[fp], f0, f1]);
+    const bad = ["feedback/fi/m/hello", "feedback/fi/m/" + d + "-0/x", "feedback/fi/x/" + d + "-0", "feedback/fi/m/../save"].filter((p) => { try { db.doc(p); return true; } catch (e) { return e.code !== "invalid_argument"; } });
+    ok(!bad.length, "the adapter refuses feedback paths that aren't <day>-<n>", bad);
     const seen = [];
     const un = A.M.listen(A.ref("users/fi/data/friends"), (s) => seen.push(s), () => {});
     await sleep(20);

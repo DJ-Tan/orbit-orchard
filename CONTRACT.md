@@ -19,9 +19,11 @@ owner's file, code against the API in this document and note what you assumed in
 | `js/audio.js` | audio agent | `window.OrchardAudio`: SFX + generative music, WebAudio only. |
 | `js/game.js` | engine agent | `window.Orchard`: canvas renderer, input, gameplay loop, visual effects, Zen/Daily generator. |
 | `orbit-orchard.html`, `js/ui.js` (plus optional `css/ui.css`) | UI agent | Page shell, all menus/tabs/pages/pop-ups, HUD, progression, saving, achievements, settings. |
+| `js/feedback.js` | UI agent | The Settings tab's Feedback card and its storage on both builds (see "Feedback"). |
 
 Script load order in `orbit-orchard.html` (plain `<script src>`, no modules, no bundler):
-`js/sim.js`, `js/levels/w1.js`, `w2.js`, `w4.js`, `w3.js`, `w5.js` (display order), `js/audio.js`, `js/game.js`, `js/ui.js`. `ui.js` boots
+`js/sim.js`, `js/levels/w1.js`, `w2.js`, `w4.js`, `w3.js`, `w5.js` (display order), `js/audio.js`, `js/game.js`, `js/ui.js`, `js/friends.js`,
+`js/feedback.js`. `ui.js` boots
 everything and sorts worlds by `order` itself, so load order is cosmetic.
 
 ## Platform rules (hard)
@@ -359,9 +361,10 @@ it is absent on claude.ai, so claude.ai docs are unchanged.
 
 Capabilities: `db` with the rules below, `downloads`, `user` with `scopes: ["profile"]`. The root rule lets only the owner write outside
 the game's paths; `data/users/{self}` keeps each player's own subtree writable at Contributor. Every other `{self}` prefix rule sets read and write;
-never add a rule at `data/users`, since it would open players' private subtrees.
+never add a rule at `data/users`, since it would open players' private subtrees. `feedback` (read and write owner) with `feedback/{self}` (write
+interact) is the Feedback card's (see "Feedback").
 The complete declaration:
-`{"db":{"rules":[{"path":"","read":"view","write":"owner"},{"path":"data/users/{self}","write":"interact"},{"path":"cards","read":"interact","write":"owner"},{"path":"cards/{self}","write":"interact"},{"path":"codes","read":"interact","write":"owner"},{"path":"codes/{self}","write":"interact"},{"path":"chal","read":"interact","write":"owner"},{"path":"chal/{self}","write":"interact"},{"path":"keys","read":"interact","write":"owner"},{"path":"keys/{self}","write":"interact"}]},"downloads":true,"user":{"scopes":["profile"]}}`
+`{"db":{"rules":[{"path":"","read":"view","write":"owner"},{"path":"data/users/{self}","write":"interact"},{"path":"cards","read":"interact","write":"owner"},{"path":"cards/{self}","write":"interact"},{"path":"codes","read":"interact","write":"owner"},{"path":"codes/{self}","write":"interact"},{"path":"chal","read":"interact","write":"owner"},{"path":"chal/{self}","write":"interact"},{"path":"keys","read":"interact","write":"owner"},{"path":"keys/{self}","write":"interact"},{"path":"feedback","read":"owner","write":"owner"},{"path":"feedback/{self}","write":"interact"}]},"downloads":true,"user":{"scopes":["profile"]}}`
 
 | path | read | write | body |
 |---|---|---|---|
@@ -373,6 +376,7 @@ The complete declaration:
 | `codes/<id>` (same shape of rules) | interact | self | `{ c, u }`, a random 6-char code from `23456789ABCDEFGHJKMNPQRSTUVWXYZ` |
 | `data/users/<id>/chal` (private, default rule) | self | self | my challenge history in plain v1 shape: `{ v, to[], from[], out: { <cid>: { to, seed, diff, at, exp, rnd?, r? } }, res: { "<sender>~<cid>": { by, cid, seed, diff, at, r? \| no: 1 } } }` |
 | `chal/<id>` (same shape of rules as `cards`) | interact | self | `{ v: 2, u, at, out: { <cid>: { t, iv, ct, k } }, res: { <rid>: { t, iv, ct, k } } }`, no plaintext ids, seeds or results |
+| `feedback/<id>/m/<YYYYMMDD>-<rand>` (`feedback`: read and write owner; `feedback/{self}`: write interact) | owner | self | a Feedback note, see "Feedback" |
 
 Friend list merge: per-id last-write-wins on `at`, a tie keeps the tombstone; tombstones pruned after 120 days; sharing and code by newest `at`.
 Following is one-way, at most 60. Everyone stores ids only; names come from `user.profiles` at render time (`name || "Someone"`).
@@ -480,6 +484,43 @@ Firefox 136's `--screenshot` sometimes snapshots before the hold image finishes 
 test short; `dev/friends/run.sh NAME WxH PAGE TAG` (e.g. `run.sh chal 1500x900 chal.html CHAL`) retries until the summary line appears,
 with `FTIME` (default 300 s) as the Firefox timeout.
 
+## Feedback (`js/feedback.js` → `window.OrchardFeedback`)
+
+A "Feedback" card in the Settings tab, under Cloud save (no tab of its own). `ui.js` renders `<div class="cloud-card fb-card" id="fbCard">`
+when `window.OrchardFeedback` exists, calls `OrchardFeedback.render(el)` on it, and calls `OrchardFeedback.init({ ic, web, info })` at boot
+(`web: { signIn, glogo }` on the web, null on claude.ai; `info()` gives `{ skin, worlds, stars }` from the save: worlds really unlocked, Journey
+stars). The card: a category radio group (Bug, Idea, Praise, Other), a textarea (`maxlength` 1000, live count), an "Include game info"
+checkbox that lists what it adds, Send, a `role="status"` line, and "Your recent feedback" (this account's last 5 sends from this browser).
+
+- Text: `clean()` coerces (strings, finite numbers, booleans; anything else is empty), turns CRLF and CR into LF, strips C0/C1 controls
+  except tab and newline, bidi overrides and isolates (U+202A–202E, U+2066–2069) and zero-width characters (U+200B–200D, U+FEFF), applies NFC,
+  drops trailing spaces on lines, keeps at most two blank lines in a row and trims. `check()` accepts 10–1000 characters after that: at least
+  10 code points and at most 1000 UTF-16 units (Firestore's `size()` counts UTF-16 units). `payload({ cat, msg, info, owner, at })` returns
+  a fresh `{ v: 1, cat, msg, at, u?, info? }` or null; `cat` must be one of the four ids. `gameInfo()` builds `info` from fixed keys only:
+  `ver` ("2"), `build` (`web`|`artifact`), `skin`, `worlds` (0–5), `stars` (0–330), `view` (`phone` < 600 px, `tablet` < 1024, `desktop`) and
+  `ua` (browser family: Firefox, Chrome, Safari, Edge, Opera, Samsung, Other). No names, emails, friend codes or ids go in it. All of these are
+  pure and exported for node (`module.exports`). Doc ids are generated, never derived from the text.
+- Rendering: the card's markup is static; the draft is set through `.value`, and the status line and the recent list use `textContent`.
+- Local state (try/catch, in-memory fallback): `orbit-orchard-feedback-draft` `{ cat, msg, info }`, kept while typing and cleared after a send;
+  `orbit-orchard-feedback` `{ v: 1, list: [{ u, day, cat, msg, at }], full: [{ u, day }] }`, the last 20 sends and days the server refused a
+  4th note. `u` is the account id, kept only on this device so each account sees its own list.
+- Limit: 3 notes per account per day. "You've sent 3 notes today; try again after <time>." The day is the Pacific day of the allowance meter
+  on the web (reset shown in local time) and the local calendar day on claude.ai (reset at local midnight).
+- States: sending ("Sending…"), sent ("Thanks — your feedback was sent"), rate-limited, signed out ("Sign in to send feedback…", plus the Google
+  button on the web), offline or unavailable (draft kept, Send retries), resting on the web ("Feedback is resting until 3:00 PM. Today's cloud
+  allowance is used up. Your note stays here as a draft."), and on claude.ai no page access or view-only access.
+- claude.ai: `claude.use("db").doc("feedback/<id>/m/<YYYYMMDD>-<rand10>").set({ v, cat, msg, at, info? })`, `rand10` from
+  `23456789abcdefghjkmnpqrstuvwxyz`. The rules let a Contributor write only under their own `feedback/<id>/`; only the artifact owner can read,
+  so the owner reads every note with ArtifactData (`list`/`query` on `feedback/<id>/m`). Rules can't enforce the daily limit, the body shape
+  or create-only here, so the limit is client-side and a player can overwrite or delete only their own notes.
+- Web: see "Web build (Firebase)": `feedback/<uid>/m/<day>-<n>`, create-only, checked field by field by the rules.
+
+Tests: `node dev/feedback/test-feedback.js` (sanitizer, payload, game info, ids, the claude.ai rule split, the declaration above, and that the
+rules mirror the client's lists). claude.ai browser suite: `dev/friends/run.sh fb 1400x900 fb.html FB` (frames for Alice, Bob, a view-only
+viewer, a signed-out viewer and the owner: XSS strings render as text, draft survives tab switches and reloads, 3 a day, owner-only reads).
+Web browser suite: `sh dev/web/run.sh feedback` (emulators running). Screenshots: `dev/friends/shot.sh NAME WxH "tab=8&fb=draft|sent|limit&skin=…"`
+and `sh dev/web/run.sh fbshots`.
+
 ## Web build (Firebase)
 
 A second target of the same game on Firebase Hosting, with Google sign-in (Firebase Auth) and cloud save in Cloud Firestore,
@@ -487,7 +528,7 @@ for players outside the artifact owner's organization, with Friends on its own F
 unchanged: `orbit-orchard.html` and its script list stay as they are, and nothing below loads there.
 
 Files: `js/backend-firebase.js` (adapter, `window.OrchardWeb`), `js/firebase-config.js` (web app config, the only file to edit
-per project), `js/friends-web.js` (Friends storage on Firestore, `window.OrchardFriendsWeb`), `css/web.css`, and `firebase/`: `build.sh`, `sw.js` (service worker template), `firebase.json`, `firestore.rules`,
+per project), `js/friends-web.js` (Friends storage on Firestore, `window.OrchardFriendsWeb`), `css/web.css` (`js/feedback.js` is shared with claude.ai), and `firebase/`: `build.sh`, `sw.js` (service worker template), `firebase.json`, `firestore.rules`,
 `firestore.indexes.json`, `.firebaserc`, `SETUP.md`. `sh firebase/build.sh` writes `firebase/public/` (generated, never edit):
 a full `index.html` (doctype, head with charset, viewport, description, title, Google Fonts and `modulepreload` links for the
 SDK) made from `orbit-orchard.html`, with `js/firebase-config.js` and `js/backend-firebase.js` inserted before `js/ui.js` and
@@ -497,7 +538,8 @@ loads and plays with no network after one visit. The Firebase JS SDK is the modu
 (`https://www.gstatic.com/firebasejs/12.19.0/`), loaded with dynamic `import()`. Deploy steps are in `firebase/SETUP.md`.
 
 Adapter contract: `OrchardWeb.use(name)` stands in for `claude.use`. `use("db")` gives `doc(path)`, mapping
-`data/users/<uid>/<name>` to Firestore `users/<uid>/data/<name>` (any other path throws `invalid_argument`); the handle has
+`data/users/<uid>/<name>` to Firestore `users/<uid>/data/<name>` and `feedback/<uid>/m/<day>-<n>` (digits only) to the same Firestore path
+(any other path throws `invalid_argument`); the handle has
 `get()`, `set(data)` and `onSnapshot(next, error)`, and snapshots are plain `{ id, exists, data(), metadata: { fromCache,
 hasPendingWrites } }`, never carrying `q`. The listener first claims an allowance block (`meter.ready()`), uses `includeMetadataChanges`,
 drops pending-write events and the server echo of the page's own last write, and on a cached snapshot passes it on, then reports
@@ -560,6 +602,7 @@ Layout (all encrypted values are AES-GCM with the same ECDH P-256 + HKDF pair ke
 | `inbox/<uid>/items/<from>_<hid>` | inbox owner | create by `from`; delete by the inbox owner or `from`; no update | `{ from, kind: "chal"\|"res", iv, ct, at, k }` |
 | `days/<day>` | any signed-in user, `get` only | +1 with the caller's seat, at most 400 | `{ n }`: allowance blocks claimed today |
 | `days/<day>/u/<uid>` | that user, `get` only | that user, +1 with the counter, at most 4 | `{ k }`: blocks this user claimed today |
+| `feedback/<uid>/m/<day>-<n>` | nobody (project owner in the console) | create by that uid, `n` 0–2, today only; no update or delete | `{ v: 1, u, cat, msg, at, info? }` |
 
 Every create or update of `users/<uid>/data/*`, `pub/<uid>` and `cards/<owner>/to/<reader>` also carries `q: { d, n }`, the doc's
 daily write counter (see "Daily allowance").
@@ -586,6 +629,9 @@ daily write counter (see "Daily allowance").
   paths), who shares, display names, codes, when cards and items were written, how many items each inbox holds and from whom.
   Not visible: any card stat, seed, difficulty, result, challenge id or which item answers which. The owner can swap a `pub` doc;
   pins and safety codes catch that exactly as on claude.ai.
+- Feedback: the client tries `<day>-<n>` from its own count of today's sends upward; a slot that exists fails the no-update rule, so it
+  moves on, and when all three are refused it shows the limit (another device sent them). Each create costs 1 write and 1 rule read
+  (the seat), like a code create.
 - Spam: rules can't rate-limit. Anyone signed in who knows a uid (from a friend code) can drop up to 2 KB items into that player's
   inbox while the player has a `pub` doc; items must name the sender, carry a 16-char id under the sender's uid, be dated within a
   day of the server clock and expire within 22 days. The client ignores and deletes what doesn't decrypt, so the cost is reads
@@ -596,7 +642,11 @@ the owner only for the names `save friends keys pins chal sent`, each with `hasO
 500, chal 40 out and 70 answers, sent 300); `pub`, `codes`, `cards` and `inbox` follow the table above, with `pub` coordinates exactly
 43 base64url chars, `n` 1–40 chars and `s` only `true`, codes 6 chars from the code alphabet, card `ct` up to 4096 chars and item
 `ct` up to 2048, item `at` within a day of `request.time` and `k` after `at` by at most 22 days, and item creation needing the
-recipient's `pub` doc (one `exists()` read). No query needs a composite index. `save` must have the wire keys (`v gen levels ach fails stats flora daily wallet settings settingsAt`,
+recipient's `pub` doc (one `exists()` read). `feedback/{uid}/m/{note}` allows only `create`, by the signed-in `uid`, with `note` one of
+`<today()>-0`, `-1`, `-2` (3 a day), the caller's seat, and `validNote`: exactly `v u cat msg at` plus optional `info`, `v == 1`,
+`u == request.auth.uid`, `cat` one of the four ids, `msg` a string of 10–1000 characters with no control (other than tab and newline), bidi
+or zero-width characters, `at == request.time` (the client sends `serverTimestamp()`), and `info` a map with `ver` (string, 1–12) and only the
+optional `build skin worlds stars view ua`, each from its fixed list or integer range. Reads, lists, updates and deletes are denied. No query needs a composite index. `save` must have the wire keys (`v gen levels ach fails stats flora daily wallet settings settingsAt`,
 optional `seen coach announced skins pals at`, nothing else), `v == 2`, numeric `gen` and `settingsAt`, map-typed sections, and entry
 caps that keep it under about 900 KB (Firestore can't measure bytes in rules): levels and fails 400, trophies 200, devices 300,
 daily days 70, wallet earn 15000, spend 3000, frost 400, `pals` 200. Every `hasOnly` list allows `q`; the metered docs need a valid `q`
@@ -615,7 +665,7 @@ Daily allowance (keeps the Spark quota of 20,000 writes and deletes, 50,000 read
   listener overrun. Constants: `ALLOW` and `CAPS` in `js/backend-firebase.js`, mirrored by `400`, `4` and the caps in the rules.
 - Counting (`OrchardWeb.meter`, per account and browser): setDoc/deleteDoc 1 write, a batch its op count, a claim 2 writes and 6 reads;
   a get 1 read, a list `max(1, docs)`, a doc listener 1 per server snapshot whose data changed, a query listener `max(1, docs)` then
-  its doc changes; plus 1 rule read for the first counter of a doc each day, 1 for a code create and 2 for an inbox create.
+  its doc changes; plus 1 rule read for the first counter of a doc each day, 1 for a code or feedback create and 2 for an inbox create.
   Counts live in localStorage (`oo.meter.<uid>.<page>` per page load, summed for the day), so a reload or another tab of the same
   browser keeps using today's blocks. Before a write the meter takes the allowance, claiming a block if needed; with none to claim
   the write is refused with `resting` and nothing is sent. Listener reads can't be refused: when they pass the allowance and no block
@@ -638,7 +688,7 @@ the resting and wake transitions with cloud.js, against a fake Firestore applyin
 `cd firebase && npx firebase-tools@15.31.0 emulators:exec --only firestore --project demo-orbit-orchard "node ../dev/web/rules-test.js"`
 (Node ≥ 20, Java 21, `@firebase/rules-unit-testing@5` and `firebase@12` on `NODE_PATH`). Browser: `sh dev/web/build.sh`
 (builds `dev/web/site/` with `errors.js` and `drive.js` injected, and `site-nosdk/` with the SDK unreachable), emulators running,
-`python3 dev/friends/serve.py 8771`, then `sh dev/web/run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|all`.
+`python3 dev/friends/serve.py 8771`, then `sh dev/web/run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|feedback|fbshots|all`.
 `rest.html` runs the allowance with `?emu=1&allow=4,400&rest=25` (dev-only overrides, read only with `?emu=1` or `window.ORCHARD_DEV`:
 `allow=W,R` sets writes and reads per block, `rest=S` ends a rest after S seconds): a user with 3 blocks used rests on her 4th
 (Settings, title and Friends wording), plays offline-style, then resumes on her own after a simulated new day; a second user meets a
@@ -650,5 +700,7 @@ challenge and answer, nectar once, Friends trophies (mutual, one-way, win, walko
 and verify, name setting, unfollow, sharing off, sign out, no console errors; it uses the emulator's `Bearer owner` REST access as the
 project owner. `frshots` seeds two players with an open challenge (`friends.html?seed=1`) and takes the Friends screenshots
 (`shot=friends-out|friends-in`, `who=alice|bob`, `safe=first`, `scroll=`). `FF_CA` adds root CAs to the throwaway Firefox profiles
-when the network intercepts TLS. `dev/web/user.js` raises Firefox's per-host connection limit, because three Firestore clients'
+when the network intercepts TLS. `feedback.html` runs the Feedback card on two origins
+(signed out, three notes with XSS strings checked in Firestore and rendered as text, the 4th refused, a second device refused by the rules,
+direct reads, updates and deletes denied, offline keeps the draft, resting wording, no console errors). `dev/web/user.js` raises Firefox's per-host connection limit, because three Firestore clients'
 long-polls to one emulator otherwise fill the default 6 and stall writes for 20–30 s.

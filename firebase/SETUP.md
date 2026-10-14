@@ -53,6 +53,7 @@ into allowance blocks so it can't run out, however many people play:
 - A block lets one browser make 36 writes and 90 reads. The day has 400 blocks, and one player can claim at most 4 a day. In the
   worst case that is 15,200 writes and about 38,400 reads, leaving about 20% of the quota as headroom.
 - Each document also has a daily write limit (save 100, friends 20, keys 10, pins 20, chal 40, sent 40, pub 20, each card 12).
+- Feedback notes come out of the same allowance: each note is 1 write and 1 read, and a player can send at most 3 a day.
 - When a player's blocks are used up, or the day's 400 are gone, the game keeps saving on the device and shows when it syncs again
   (after midnight Pacific, in the player's local time). It reconnects on its own after the reset.
 
@@ -72,6 +73,22 @@ Keep `day × (writes + 2)` and `day × (reads + 6)` about 20% under the daily qu
 covers 2026–2036; before 2037, raise `TO` in `dev/web/gen-dst.js`, run `node dev/web/gen-dst.js` and deploy.
 
 Tabs left open from a build before this change can't save (the rules refuse writes without the daily counter) until they reload.
+
+## Reading feedback
+
+Players send notes from **Settings > Feedback**. They land in **Firestore Database > Data > feedback > (player's uid) > m**, one document
+per note, named `<day>-<n>`: the Pacific day number (as in `days`) and 0, 1 or 2, so each player can send at most 3 a day. The rules
+(`match /feedback/...` in `firebase/firestore.rules`, published by the same deploy) let a signed-in player create only their own notes for
+today, never read, change or delete them; only you see them, in the console or with the Admin SDK. Each note has:
+
+- `cat`: `bug`, `idea`, `praise` or `other`
+- `msg`: the note, 10 to 1000 characters, with control, direction-override and zero-width characters removed
+- `at`: when it was sent (server time); `u`: the player's uid (the same as the parent document's name)
+- `info` (only if the player ticked "Include game info"): `ver`, `build` (`web`), `skin`, `worlds`, `stars`, `view` (`phone`, `tablet` or
+  `desktop`) and `ua` (browser family only, such as `Firefox`). It never holds a name, email or friend code.
+
+Treat a note's text as untrusted: read it as plain text, and don't paste it into anything that runs HTML or scripts. Old notes can be deleted
+from the console at any time.
 
 ## Optional: try it locally first
 

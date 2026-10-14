@@ -46,6 +46,25 @@
         await waitFor(function () { return document.querySelector(".fr-result"); }, 4000);
       }
       if (q.get("safe")) { var sb = document.querySelector(".fr-row[data-id=" + q.get("safe") + "] [data-f=safe]"); if (sb) sb.click(); await sleep(300); }
+      if (q.get("fb")) {
+        var ta = document.getElementById("fbMsg"), FB = window.OrchardFeedback;
+        var type = function (m) { ta.value = m; ta.dispatchEvent(new Event("input", { bubbles: true })); };
+        var NOTES = ["The sun in Frost Reach 7 hides the last fertile planet behind the HUD on my phone.", "<img src=x onerror=alert(1)> shows up as text, nice.", "Love the Synthwave skin. More trails please!"];
+        for (var s = 0; s < (q.get("fb") === "limit" ? 3 : q.get("fb") === "sent" ? 1 : 0); s++) {
+          type(NOTES[s]);
+          document.querySelector("[data-fb=send]").click();
+          await waitFor(function () { return FB.status().flash === "sent" && !FB.status().busy; }, 4000);
+          await sleep(50);
+        }
+        if (q.get("fb") === "draft" || q.get("fb") === "limit") {
+          var r = document.querySelector("input[name=fbCat][value=idea]"); r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true }));
+          type("A zoom-out button for the big Event Horizon plots would help on small screens.");
+          var ib = document.getElementById("fbInfo"); ib.checked = true; ib.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        await sleep(200);
+        document.getElementById("fbCard").previousElementSibling.scrollIntoView({ block: q.get("fbat") || "start" });
+        log("FB " + JSON.stringify(FB.status()) + " st=" + document.getElementById("fbSt").textContent);
+      }
       if (q.get("click")) { var cb = document.querySelector("[data-f=" + q.get("click") + "]"); if (cb) cb.click(); await sleep(800); }
       if (q.get("scroll")) { var el = document.querySelector(q.get("scroll")); if (el) el.scrollIntoView({ block: "start" }); }
       await sleep(+(q.get("settle") || 500));

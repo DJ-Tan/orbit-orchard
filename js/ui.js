@@ -1568,6 +1568,8 @@
       </div>
       ${compact ? "" : `<h3 class="sec-h">Cloud save</h3>
       <div class="cloud-card" id="cloudCard"></div>
+      ${window.OrchardFeedback ? `<h3 class="sec-h">Feedback</h3>
+      <div class="cloud-card fb-card" id="fbCard"></div>` : ""}
       <h3 class="sec-h">Controls</h3>
       <div class="keys">
         <div><kbd>Drag</kbd>pull back anywhere, release to sow</div>
@@ -1613,6 +1615,8 @@
     el.addEventListener("change", (e) => { if (e.target.closest("[data-vol]")) sfx("tick"); });
     const cc = $("#cloudCard", el);
     if (cc) { renderCloudCard(cc); wireCloudCard(cc); }
+    const fc = $("#fbCard", el);
+    if (fc) window.OrchardFeedback.render(fc);
   }
 
   const NECTAR = { clear: 10, star2: 5, star3: 10, golden: 10, par: 5, daily: 15, ach: 20 };
@@ -2805,6 +2809,10 @@
     if (gained) note(`Star targets got friendlier: +${gained} star${gained === 1 ? "" : "s"} from your past clears`, "good");
     if (window.OrchardCloud) cloud = window.OrchardCloud.start({ backend: web, minGap: web ? () => (web.meter.slow() ? WEB_SLOW : WEB_GAP) : 0, get: () => S, replace: adoptSave, onStatus: (st) => { cloudSt = web ? web.view(st) : st; refreshCloudUi(); if (st.mode !== "connecting" && st.mode !== "saving") frostCheck(); } });
     if (web) web.on(onWeb);
+    if (window.OrchardFeedback) window.OrchardFeedback.init({
+      ic, web: web ? { signIn: webSignIn, glogo: GLOGO } : null,
+      info: () => ({ skin: S.settings.skin, worlds: realUnlockedList().length, stars: WORLDS.reduce((n, w) => n + worldStars(w), 0) })
+    });
     if (window.OrchardFriends) window.OrchardFriends.init({
       get: () => S, worlds: () => WORLDS, levelsOf, ach: () => ACH, pals: addPals, liveStreak, nectar, dayKey, DIFF, CHAL_PAY, CHAL_CAP,
       ic, esc, miniStars, sfx, note, nectarPop, openModal, confirmModal, startChallenge, quitToMenu,

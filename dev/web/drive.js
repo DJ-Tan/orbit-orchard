@@ -214,6 +214,8 @@
         if (op === "list") { const q = await fs.getDocsFromServer(fs.collection(db, path)); return { ids: q.docs.map((d) => d.id) }; }
         if (op === "set") { await fs.setDoc(fs.doc(db, path), extra); return { ok: true }; }
         if (op === "del") { await fs.deleteDoc(fs.doc(db, path)); return { ok: true }; }
+        if (op === "note") { await fs.setDoc(fs.doc(db, path), Object.assign({}, extra, { at: fs.serverTimestamp() })); return { ok: true }; }
+        if (op === "update") { await fs.updateDoc(fs.doc(db, path), extra); return { ok: true }; }
       } catch (e) { return { err: e.code || String(e), segs: segs.length }; }
       return { err: "op" };
     },
@@ -222,6 +224,58 @@
       const t0 = Date.now(), s = await fs.getDocFromServer(r), t1 = Date.now();
       await Promise.race([fs.setDoc(r, s.data()), sleep(30000)]);
       return { get: t1 - t0, set: Date.now() - t1 };
+    },
+    async fbOpen() {
+      await T.enterHub();
+      key("1");
+      await sleep(80);
+      key(String(T.state().tabs.indexOf("settings") + 1));
+      await waitFor(() => $("#fbCard") && OrchardFeedback.status().mode !== "off", 8000);
+      await sleep(100);
+      return T.fb();
+    },
+    fb() {
+      const s = window.OrchardFeedback ? OrchardFeedback.status() : {}, sb = $("#fbCard [data-fb=signin]"), b = $("#fbCard [data-fb=send]");
+      let draft = null;
+      try { draft = JSON.parse(localStorage.getItem("orbit-orchard-feedback-draft") || "null"); } catch (e) { draft = null; }
+      return {
+        mode: s.mode, flash: s.flash, busy: s.busy, id: s.id, st: ($("#fbSt") || {}).textContent || "", send: !!b && !b.disabled, sign: !!sb && !sb.hidden,
+        msg: ($("#fbMsg") || {}).value, cat: ($("input[name=fbCat]:checked") || {}).value, list: $$("#fbRecent li .fb-text").map((e) => e.textContent),
+        injected: $$("#fbRecent img, #fbRecent script, #fbRecent svg, #fbRecent iframe, #fbRecent a, #fbRecent [onerror], #fbRecent [onload], #fbRecent .fb-text *").length,
+        alerts: window.__alerts || 0, polluted: ({}).polluted, draft, errs: window.__errs.slice()
+      };
+    },
+    fbType(msg, cat, info) {
+      window.alert = () => { window.__alerts = (window.__alerts || 0) + 1; };
+      if (cat) { const r = $("input[name=fbCat][value=" + cat + "]"); r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); }
+      const t = $("#fbMsg");
+      t.value = msg;
+      t.dispatchEvent(new Event("input", { bubbles: true }));
+      const i = $("#fbInfo");
+      if (i.checked !== !!info) { i.checked = !!info; i.dispatchEvent(new Event("change", { bubbles: true })); }
+      return T.fb();
+    },
+    async fbSend(msg, cat, info, force) {
+      T.fbType(msg, cat, info);
+      const b = $("#fbCard [data-fb=send]");
+      if (b.disabled && !force) return Object.assign(T.fb(), { clicked: false });
+      b.disabled = false;
+      b.click();
+      await sleep(30);
+      await waitFor(() => !OrchardFeedback.status().busy, 20000);
+      await sleep(200);
+      return Object.assign(T.fb(), { clicked: true });
+    },
+    async fbNet(on) {
+      Object.defineProperty(navigator, "onLine", { configurable: true, get: () => on });
+      dispatchEvent(new Event(on ? "online" : "offline"));
+      await sleep(400);
+      return T.fb();
+    },
+    async fbRest(on) {
+      const k = "oo.meter." + OrchardWeb.account().uid, i = JSON.parse(localStorage.getItem(k) || "{}");
+      localStorage.setItem(k, JSON.stringify(Object.assign(i, { d: OrchardWeb.meter.today(), rest: on ? "self" : null, at: Date.now() })));
+      return T.fbOpen();
     },
     async signOut() { await OrchardWeb.signOut(); await waitFor(() => !OrchardWeb.account(), 5000); await sleep(400); return T.fr(); },
     async waitCaches() {
@@ -260,6 +314,16 @@
     if (/-rest$/.test(name)) { await T.signIn(who); await waitFor(() => OrchardWeb.meter.state() && OrchardWeb.meter.state().asleep, 15000); await sleep(500); }
     if (/^settings/.test(name)) await T.settings();
     if (/^journey/.test(name)) await T.enterHub();
+    if (/^feedback/.test(name)) {
+      await T.fbOpen();
+      if (q.get("skin")) { const p = $("[data-pick=" + q.get("skin") + "]"); if (p) p.click(); }
+      const fb = q.get("fb") || "", N = ["The sun in Frost Reach 7 hides the last fertile planet behind the HUD on my phone.", "<img src=x onerror=alert(1)> shows up as text, nice.", "Love the Synthwave skin. More trails please!"];
+      if (/-in$/.test(name)) await waitFor(() => OrchardFeedback.status().mode === "ready", 15000);
+      for (let i = 0; i < (fb === "limit" ? 3 : fb === "sent" ? 1 : 0); i++) await T.fbSend(N[i], ["bug", "praise", "idea"][i]);
+      if (fb === "draft" || fb === "limit" || /-out$/.test(name)) T.fbType("A zoom-out button for the big Event Horizon plots would help on small screens.", "idea", true);
+      await sleep(300);
+      $("#fbCard").previousElementSibling.scrollIntoView({ block: q.get("fbat") || "start", behavior: "instant" });
+    }
     if (/^trophies/.test(name)) { await T.enterHub(); key(String(T.state().tabs.indexOf("trophies") + 1)); }
     if (/-in$/.test(name)) await T.waitCloud("synced");
     if (/^friends/.test(name)) {
@@ -270,10 +334,10 @@
       if (q.get("safe")) { const r = $(".fr-row"); await T.frSafe(q.get("safe") === "first" && r ? r.dataset.id : q.get("safe")); $(".fr-safe").scrollIntoView({ block: "center", behavior: "instant" }); }
     }
     await sleep(800);
-    if ($("#cloudCard")) $("#cloudCard").scrollIntoView({ block: "center", behavior: "instant" });
+    if ($("#cloudCard") && !/^feedback/.test(name)) $("#cloudCard").scrollIntoView({ block: "center", behavior: "instant" });
     if (q.get("scroll")) { const e = $(q.get("scroll")); if (e) e.scrollIntoView({ block: "start", behavior: "instant" }); }
     await sleep(100);
-    console.log("[t] SHOT " + name + " " + JSON.stringify(/^friends/.test(name) ? T.fr() : { state: T.state(), card: T.card() }));
+    console.log("[t] SHOT " + name + " " + JSON.stringify(/^friends/.test(name) ? T.fr() : /^feedback/.test(name) ? T.fb() : { state: T.state(), card: T.card() }));
     fetch("/__release?k=" + encodeURIComponent(q.get("k") || name));
   }
 

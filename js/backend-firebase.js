@@ -9,7 +9,7 @@
   const ALLOW = { day: 400, user: 4, writes: 36, reads: 90, near: 380 };
   const CAPS = { save: 100, friends: 20, keys: 10, pins: 20, chal: 40, sent: 40, pub: 20, card: 12 };
   const DST = [[1772964000000, 1793523600000], [1805018400000, 1825578000000], [1836468000000, 1857027600000], [1867917600000, 1888477200000], [1899367200000, 1919926800000], [1930816800000, 1951376400000], [1962871200000, 1983430800000], [1994320800000, 2014880400000], [2025770400000, 2046330000000], [2057220000000, 2077779600000], [2088669600000, 2109229200000]];
-  const DAY = 86400000, PDT = 25200000, PST = 28800000, EDGE = 900000, JITTER = 600000, CLAIM_W = 2, CLAIM_R = 4;
+  const DAY = 86400000, PDT = 25200000, PST = 28800000, EDGE = 900000, JITTER = 600000, CLAIM_W = 2, CLAIM_R = 4, CLAIM_TRIES = 3;
 
   const qp = new URLSearchParams(location.search);
   const emu = qp.get("emu") === "1";
@@ -37,7 +37,7 @@
     const m = /^users\/[^/]+\/data\/(save|friends|keys|pins|chal|sent)$/.exec(p);
     return m ? CAPS[m[1]] : /^pub\/[^/]+$/.test(p) ? CAPS.pub : /^cards\/[^/]+\/to\/[^/]+$/.test(p) ? CAPS.card : 0;
   };
-  const gateOf = (p) => (/^inbox\//.test(p) ? 2 : /^codes\//.test(p) ? 1 : 0);
+  const gateOf = (p) => (/^inbox\//.test(p) ? 2 : /^(codes|feedback)\//.test(p) ? 1 : 0);
   const strip = (d) => { if (!isObj(d) || !("q" in d)) return d; const c = Object.assign({}, d); delete c.q; return c; };
   const metaOf = (m) => ({ fromCache: !!(m && m.fromCache), hasPendingWrites: !!(m && m.hasPendingWrites) });
   const plainDoc = (id, d, m) => ({ id, exists: d !== undefined, data: () => (d === undefined ? undefined : JSON.parse(JSON.stringify(strip(d)))), metadata: metaOf(m) });
@@ -90,9 +90,10 @@
   }
 
   function mapPath(path) {
-    const m = /^data\/users\/([^/]+)\/([^/]+)$/.exec(path);
-    if (!m) throw Object.assign(new Error("Unsupported path " + path), { code: "invalid_argument" });
-    return fb.fs.doc(fb.db, "users", m[1], "data", m[2]);
+    const m = /^data\/users\/([^/]+)\/([^/]+)$/.exec(path), f = /^feedback\/([^/]+)\/m\/(\d+-\d)$/.exec(path);
+    if (m) return fb.fs.doc(fb.db, "users", m[1], "data", m[2]);
+    if (f) return fb.fs.doc(fb.db, "feedback", f[1], "m", f[2]);
+    throw Object.assign(new Error("Unsupported path " + path), { code: "invalid_argument" });
   }
 
   /** Today's allowance for one account in this browser: blocks claimed in Firestore, writes and reads counted per page in localStorage. */
@@ -154,25 +155,29 @@
       if (navigator.onLine === false) throw later("offline");
       const d = String(today()), c = fb.fs.doc(fb.db, "days", d), s = fb.fs.doc(fb.db, "days", d, "u", uid);
       let got = 0, r = null;
-      try {
-        r = await fb.fs.runTransaction(fb.db, async (tx) => {
-          const cs = await tx.get(c);
-          got++;
-          const n = cs.exists() ? cs.data().n | 0 : 0;
-          if (n >= ALLOW.day) return { why: "full", n };
-          const ss = await tx.get(s);
-          got++;
-          const k = ss.exists() ? ss.data().k | 0 : 0;
-          if (k >= ALLOW.user) return { why: "self", n, k };
-          tx.set(c, { n: n + 1 });
-          tx.set(s, { k: k + 1 });
-          return { n: n + 1, k: k + 1 };
-        });
-      } catch (e) {
-        add(0, 0, got);
-        const now = Date.now();
-        retryAt = now + (nearEdge(now) ? 120000 + Math.random() * 120000 : e && e.code === "permission-denied" ? 1800000 : 15000 + Math.random() * 15000);
-        throw later((e && e.message) || "claim failed");
+      for (let a = 0; ; a++) {
+        try {
+          r = await fb.fs.runTransaction(fb.db, async (tx) => {
+            const cs = await tx.get(c);
+            got++;
+            const n = cs.exists() ? cs.data().n | 0 : 0;
+            if (n >= ALLOW.day) return { why: "full", n };
+            const ss = await tx.get(s);
+            got++;
+            const k = ss.exists() ? ss.data().k | 0 : 0;
+            if (k >= ALLOW.user) return { why: "self", n, k };
+            tx.set(c, { n: n + 1 });
+            tx.set(s, { k: k + 1 });
+            return { n: n + 1, k: k + 1 };
+          });
+          break;
+        } catch (e) {
+          if (e && e.code === "permission-denied" && a < CLAIM_TRIES && !nearEdge(Date.now())) { await sleep(300 + Math.random() * 1200); continue; }
+          add(0, 0, got);
+          const now = Date.now();
+          retryAt = now + (nearEdge(now) ? 120000 + Math.random() * 120000 : e && e.code === "permission-denied" ? 1800000 : 15000 + Math.random() * 15000);
+          throw later((e && e.message) || "claim failed");
+        }
       }
       note({ n: r.n, k: r.k });
       if (r.why) { add(0, 0, got); return rest(r.why); }

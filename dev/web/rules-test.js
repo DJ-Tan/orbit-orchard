@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where, runTransaction, writeBatch } = require("firebase/firestore");
+const { doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where, runTransaction, writeBatch, serverTimestamp } = require("firebase/firestore");
 const C = require("../../js/cloud.js");
 const G = require("./gen-dst.js");
 
@@ -229,6 +229,92 @@ async function allowance(env, alice, bob, anon) {
   await check("cards: a batch of 60 first writes of the day accepted (one seat lookup)", assertSucceeds(w.commit()));
 }
 
+async function feedback(env, alice, bob, anon) {
+  const db = (u) => env.authenticatedContext(u).firestore();
+  const fa = db("fa"), fb = db("fb"), fc = db("fc"), gus = db("gus");
+  for (const [d, u] of [[fa, "fa"], [fb, "fb"], [fc, "fc"]]) await check("feedback: " + u + " claims a block", assertSucceeds(claim(d, u)));
+  const fp = (u, n) => "feedback/" + u + "/m/" + n;
+  const note = (u, extra) => Object.assign({ v: 1, u, cat: "bug", msg: "The sun in w1-03 hides the last plot.", at: serverTimestamp() }, extra || {});
+  const without = (u, k) => { const d = note(u); delete d[k]; return d; };
+  const info = (extra) => Object.assign({ ver: "2", build: "web", skin: "nocturne", worlds: 3, stars: 120, view: "desktop", ua: "Firefox" }, extra || {});
+  const put = (d, u, n, body) => setDoc(doc(d, fp(u, n)), body);
+
+  await check("feedback: create with exactly 10 characters, a newline and a tab accepted", assertSucceeds(put(fa, "fa", D + "-0", note("fa", { msg: "line one\n\tx" }))));
+  await check("feedback: create with 1000 characters and full game info accepted", assertSucceeds(put(fa, "fa", D + "-1", note("fa", { cat: "idea", msg: "a".repeat(1000), info: info() }))));
+  await check("feedback: third note of the day accepted", assertSucceeds(put(fa, "fa", D + "-2", note("fa", { cat: "praise" }))));
+  await check("feedback: a 4th note of the day denied", assertFails(put(fa, "fa", D + "-3", note("fa"))));
+  await check("feedback: reusing today's first slot (update) denied", assertFails(put(fa, "fa", D + "-0", note("fa", { cat: "other" }))));
+  await check("feedback: partial update denied", assertFails(updateDoc(doc(fa, fp("fa", D + "-1")), { cat: "other" })));
+  await check("feedback: owner can't delete", assertFails(deleteDoc(doc(fa, fp("fa", D + "-0")))));
+  await check("feedback: owner can't read own note", assertFails(getDoc(doc(fa, fp("fa", D + "-0")))));
+  await check("feedback: owner can't list own notes", assertFails(getDocs(collection(fa, "feedback/fa/m"))));
+  await check("feedback: owner can't query own notes", assertFails(getDocs(query(collection(fa, "feedback/fa/m"), where("u", "==", "fa")))));
+  await check("feedback: another user can't read a note", assertFails(getDoc(doc(fb, fp("fa", D + "-0")))));
+  await check("feedback: another user can't list notes", assertFails(getDocs(collection(fb, "feedback/fa/m"))));
+  await check("feedback: another user can't delete a note", assertFails(deleteDoc(doc(fb, fp("fa", D + "-0")))));
+  await check("feedback: signed out can't read a note", assertFails(getDoc(doc(anon, fp("fa", D + "-0")))));
+  await check("feedback: per-user parent doc can't be written", assertFails(setDoc(doc(fa, "feedback/fa"), { n: 1 })));
+  await check("feedback: per-user parent doc can't be read", assertFails(getDoc(doc(fa, "feedback/fa"))));
+  await check("feedback: top-level collection can't be listed", assertFails(getDocs(collection(fa, "feedback"))));
+
+  await check("feedback: writing into another user's notes denied", assertFails(put(fb, "fa", D + "-0", note("fb"))));
+  await check("feedback: another user's slot with their uid as owner denied", assertFails(put(fb, "fc", D + "-0", note("fc"))));
+  await check("feedback: own path with someone else's owner field denied", assertFails(put(fb, "fb", D + "-0", note("fa"))));
+  await check("feedback: signed out create denied", assertFails(put(anon, "fb", D + "-0", note("fb"))));
+  await check("feedback: yesterday's day id denied", assertFails(put(fb, "fb", (D - 1) + "-0", note("fb"))));
+  await check("feedback: tomorrow's day id denied", assertFails(put(fb, "fb", (D + 1) + "-0", note("fb"))));
+  await check("feedback: padded counter denied", assertFails(put(fb, "fb", D + "-00", note("fb"))));
+  await check("feedback: id from the message text denied", assertFails(put(fb, "fb", "the-sun-in-w1-03", note("fb"))));
+  await check("feedback: random id denied", assertFails(put(fb, "fb", D + "-k3m9x2ab", note("fb"))));
+  await check("feedback: 1001 characters denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "a".repeat(1001) }))));
+  await check("feedback: 9 characters denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "too short" }))));
+  await check("feedback: empty message denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "" }))));
+  await check("feedback: message as a number denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: 12345678901 }))));
+  await check("feedback: message as a list denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: ["a long enough line"] }))));
+  await check("feedback: message as a map denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: { toString: "a long enough line" } }))));
+  await check("feedback: NUL character denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello\u0000 world here" }))));
+  await check("feedback: carriage return denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello\r\nworld here" }))));
+  await check("feedback: C1 control denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello \u0085 world here" }))));
+  await check("feedback: bidi override denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello \u202Edlrow here" }))));
+  await check("feedback: bidi isolate denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello \u2066world\u2069 here" }))));
+  await check("feedback: zero-width space denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "hello\u200Bworld here" }))));
+  await check("feedback: byte order mark denied", assertFails(put(fb, "fb", D + "-0", note("fb", { msg: "\uFEFFhello world here" }))));
+  await check("feedback: unknown category denied", assertFails(put(fb, "fb", D + "-0", note("fb", { cat: "spam" }))));
+  await check("feedback: category in another case denied", assertFails(put(fb, "fb", D + "-0", note("fb", { cat: "Bug" }))));
+  await check("feedback: category as a list denied", assertFails(put(fb, "fb", D + "-0", note("fb", { cat: ["bug"] }))));
+  await check("feedback: extra key denied", assertFails(put(fb, "fb", D + "-0", note("fb", { name: "Bob" }))));
+  await check("feedback: constructor key denied", assertFails(put(fb, "fb", D + "-0", note("fb", { constructor: { admin: true } }))));
+  await check("feedback: a __proto__ field never leaves the SDK", Promise.resolve().then(() => put(fb, "fb", D + "-0", Object.defineProperty(note("fb"), "__proto__", { value: { admin: true }, enumerable: true }))).then(() => Promise.reject(new Error("accepted")), (e) => (e && e.code === "invalid-argument" ? null : Promise.reject(e))));
+  for (const k of ["v", "u", "cat", "msg", "at"]) await check("feedback: missing " + k + " denied", assertFails(put(fb, "fb", D + "-0", without("fb", k))));
+  await check("feedback: version 2 denied", assertFails(put(fb, "fb", D + "-0", note("fb", { v: 2 }))));
+  await check("feedback: version as a string denied", assertFails(put(fb, "fb", D + "-0", note("fb", { v: "1" }))));
+  await check("feedback: client clock instead of the server time denied", assertFails(put(fb, "fb", D + "-0", note("fb", { at: Date.now() }))));
+  await check("feedback: backdated timestamp denied", assertFails(put(fb, "fb", D + "-0", note("fb", { at: new Date(Date.now() - 864e5) }))));
+  await check("feedback: info as a string denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: "Firefox 131 on Linux" }))));
+  await check("feedback: info with an extra key denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ email: "bob@example.com" }) }))));
+  await check("feedback: info with a uid denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ uid: "fb" }) }))));
+  await check("feedback: info without ver denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: (() => { const i = info(); delete i.ver; return i; })() }))));
+  await check("feedback: info ver over 12 chars denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ ver: "x".repeat(13) }) }))));
+  await check("feedback: full user agent string denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ ua: "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0" }) }))));
+  await check("feedback: unknown skin denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ skin: "<b>x</b>" }) }))));
+  await check("feedback: unknown screen size class denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ view: "1920x1080" }) }))));
+  await check("feedback: unknown build denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ build: "dev" }) }))));
+  await check("feedback: 6 worlds denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ worlds: 6 }) }))));
+  await check("feedback: 331 stars denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ stars: 331 }) }))));
+  await check("feedback: fractional stars denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ stars: 1.5 }) }))));
+  await check("feedback: negative worlds denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ worlds: -1 }) }))));
+  await check("feedback: stars as a string denied", assertFails(put(fb, "fb", D + "-0", note("fb", { info: info({ stars: "120" }) }))));
+  await check("feedback: bob's own first note accepted", assertSucceeds(put(fb, "fb", D + "-0", note("fb", { cat: "other", info: { ver: "2", ua: "Other" } }))));
+  await check("feedback: bob can't read it back", assertFails(getDoc(doc(fb, fp("fb", D + "-0")))));
+  await check("feedback: a batch writing two slots at once is limited by the same rules", assertSucceeds((() => { const w = writeBatch(fc); w.set(doc(fc, fp("fc", D + "-0")), note("fc")); w.set(doc(fc, fp("fc", D + "-1")), note("fc")); return w.commit(); })()));
+  await check("feedback: a batch reaching a 4th slot denied", assertFails((() => { const w = writeBatch(fc); w.set(doc(fc, fp("fc", D + "-2")), note("fc")); w.set(doc(fc, fp("fc", D + "-3")), note("fc")); return w.commit(); })()));
+  await check("feedback: no seat today denied", assertFails(put(gus, "gus", D + "-0", note("gus"))));
+  await check("feedback: gus claims a block", assertSucceeds(claim(gus, "gus")));
+  await check("feedback: seated, the same note accepted", assertSucceeds(put(gus, "gus", D + "-0", note("gus"))));
+  const stored = await (async () => { let v = null; await env.withSecurityRulesDisabled(async (c) => { const s = await getDoc(doc(c.firestore(), fp("fa", D + "-1"))); v = s.data(); }); return v; })();
+  await check("feedback: the project owner (Admin access) reads the stored note", stored && stored.msg.length === 1000 && stored.info.ua === "Firefox" && stored.at && typeof stored.at.toMillis === "function" ? Promise.resolve() : Promise.reject(new Error(JSON.stringify(stored))));
+}
+
 (async () => {
   const env = await initializeTestEnvironment({
     projectId: "demo-orbit-orchard",
@@ -284,6 +370,7 @@ async function allowance(env, alice, bob, anon) {
 
   await friends(env, alice, bob, anon);
   await allowance(env, alice, bob, anon);
+  await feedback(env, alice, bob, anon);
   await env.cleanup();
   console.log(failN ? `RULES FAIL ${failN} of ${pass + failN}` : `RULES PASS ${pass} checks`);
   process.exit(failN ? 1 : 0);

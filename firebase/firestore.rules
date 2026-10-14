@@ -126,6 +126,27 @@ service cloud.firestore {
         && d.k is int && d.k > d.at && d.k <= d.at + 22 * 86400000;
     }
 
+    function validInfo(i) {
+      return i is map && i.keys().hasAll(['ver']) && i.keys().hasOnly(['ver', 'build', 'skin', 'worlds', 'stars', 'view', 'ua'])
+        && i.ver is string && i.ver.size() > 0 && i.ver.size() <= 12
+        && (!('build' in i) || i.build in ['web', 'artifact'])
+        && (!('skin' in i) || i.skin in ['nocturne', 'daylight', 'synthwave', 'inkwell'])
+        && (!('worlds' in i) || (i.worlds is int && i.worlds >= 0 && i.worlds <= 5))
+        && (!('stars' in i) || (i.stars is int && i.stars >= 0 && i.stars <= 330))
+        && (!('view' in i) || i.view in ['phone', 'tablet', 'desktop'])
+        && (!('ua' in i) || i.ua in ['Firefox', 'Chrome', 'Safari', 'Edge', 'Opera', 'Samsung', 'Other']);
+    }
+
+    function validNote(d) {
+      return d.keys().hasAll(['v', 'u', 'cat', 'msg', 'at']) && d.keys().hasOnly(['v', 'u', 'cat', 'msg', 'at', 'info'])
+        && d.v == 1 && d.u == request.auth.uid
+        && d.cat in ['bug', 'idea', 'praise', 'other']
+        && d.msg is string && d.msg.size() >= 10 && d.msg.size() <= 1000
+        && !d.msg.matches('(?s).*[\\x{0}-\\x{8}\\x{B}-\\x{1F}\\x{7F}-\\x{9F}\\x{200B}-\\x{200D}\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}\\x{FEFF}].*')
+        && d.at == request.time
+        && (!('info' in d) || validInfo(d.info));
+    }
+
     match /users/{uid}/data/{name} {
       allow read, delete: if signedInAs(uid);
       allow create, update: if signedInAs(uid) && validData(name, request.resource.data)
@@ -160,6 +181,13 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/pub/$(uid))
         && seated();
       allow delete: if signedInAs(uid) || (signedIn() && resource.data.from == request.auth.uid);
+    }
+
+    match /feedback/{uid}/m/{note} {
+      allow create: if signedInAs(uid)
+        && note in [string(today()) + '-0', string(today()) + '-1', string(today()) + '-2']
+        && validNote(request.resource.data)
+        && seated();
     }
 
     match /days/{day} {

@@ -1,5 +1,5 @@
 #!/bin/sh
-# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|trophies|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
+# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|trophies|feedback|fbshots|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
 cd "$(dirname "$0")"
 mkdir -p shots/dl
 PORT=${WPORT:-8771}
@@ -24,6 +24,19 @@ case "$1" in offline|all)
   ;;
 esac
 case "$1" in rest|all) ff rest 1400x1000 "$BASE/rest.html" 420 ;; esac
+case "$1" in feedback|all) ff feedback 1400x1000 "$BASE/feedback.html" 300 ;; esac
+case "$1" in fbshots)
+  wipe() { curl -s -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/demo-orbit-orchard/databases/(default)/documents" > /dev/null; }
+  for W in 1280x800 400x800; do
+    N=${W%%x*}
+    wipe
+    ff fb-out-$N $W "$BASE/site/index.html?emu=1&shot=feedback-out"
+    ff fb-sent-$N $W "$BASE/site/index.html?emu=1&shot=feedback-in&fb=sent&who=alice&skin=synthwave"
+    wipe
+    ff fb-limit-$N $W "$BASE/site/index.html?emu=1&shot=feedback-in&fb=limit&who=bob&skin=inkwell"
+  done
+  ;;
+esac
 case "$1" in restshots)
   ff restseed 1400x1000 "$BASE/rest.html?seed=1" 120
   for W in 1280x800 400x800; do
