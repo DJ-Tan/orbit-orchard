@@ -4,9 +4,9 @@
 
 Pull back, let go, and watch your seed curve around rocks, whip past suns, glance off ice and slip through folds in space before it lands on fertile soil. Orbit Orchard is a gravity puzzle about the perfect throw: easy to pick up, hard to put down, and deeply satisfying when a three-star shot falls into place.
 
-<video src="docs/media/trailer.mp4" poster="docs/media/trailer-poster.png" controls playsinline preload="metadata" width="100%">
-  <a href="docs/media/trailer.mp4"><img src="docs/media/trailer.gif" alt="Orbit Orchard trailer"></a>
-</video>
+<a href="docs/media/trailer.mp4"><img src="docs/media/trailer.gif" width="100%" alt="Orbit Orchard trailer"></a>
+
+🎬 [Watch the full trailer with sound (52 s)](docs/media/trailer.mp4)
 
 ### ▶ [Play free in your browser at orbit-orchard.web.app](https://orbit-orchard.web.app)
 
