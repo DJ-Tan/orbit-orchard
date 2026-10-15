@@ -433,6 +433,7 @@
       else if (!on) s.hidden = true;
     });
     if (name === "game") syncFast();
+    if (window.OrchardUsername && web) window.OrchardUsername.screen();
     if (name !== "game") { closeCoach(); $("#demoBar").hidden = true; eng("setViewInsets", { top: 0, right: 0, bottom: 0, left: 0 }); }
     syncInput();
   }
@@ -2023,14 +2024,19 @@
   }
   function renderWebCard(c) {
     const s = cloudSt, a = web.account(), live = !!a && !!cloud && s.mode !== "local" && s.mode !== "readonly";
+    const un = a && window.OrchardUsername ? window.OrchardUsername.mine(a.uid) : "";
     const signBtn = web.available() ? `<button class="btn small primary" type="button" data-c="signin" ${web.busy() || !web.known() ? "disabled" : ""}>${GLOGO}${web.busy() ? "Signing in" : "Sign in with Google"}</button>` : "";
     const fileBtns = `<button class="btn small" type="button" data-c="export">${ic("down")}Download save</button><button class="btn small" type="button" data-c="import">${ic("up")}Load a save file</button><input type="file" accept=".json,application/json" hidden data-c="file">`;
-    c.innerHTML = `<div class="cc-id"><span class="av"></span><div><b class="nm"></b><span class="muted em"></span><span class="muted st"><i class="cdot ${esc(s.mode)}"></i><span></span></span></div></div>
-      <p class="muted cc-note">${a ? "Progress, stars, trophies, nectar and your look follow your Google account to any device. Sound levels stay per device. Signing out keeps this device's save." : "Your progress is saved in this browser. Sign in with Google to back it up and carry it to other devices. What you've played here is merged in, nothing is lost."}</p>
+    if (!$(".cc-top", c)) {
+      c.innerHTML = `<div class="cc-top"></div><div class="un-box" hidden></div><div class="cc-bot"></div>`;
+      if (window.OrchardUsername) window.OrchardUsername.render($(".un-box", c));
+    }
+    $(".cc-top", c).innerHTML = `<div class="cc-id"><span class="av"></span><div><b class="nm"></b><span class="muted em"></span><span class="muted st"><i class="cdot ${esc(s.mode)}"></i><span></span></span></div></div>`;
+    $(".cc-bot", c).innerHTML = `<p class="muted cc-note">${a ? "Progress, stars, trophies, nectar and your look follow your Google account to any device. Sound levels stay per device. Signing out keeps this device's save." : "Your progress is saved in this browser. Sign in with Google to back it up and carry it to other devices. What you've played here is merged in, nothing is lost."}</p>
       <div class="row">${a ? `<button class="btn small" type="button" data-c="sync" ${live && s.mode !== "resting" ? "" : "disabled"}>${ic("sync")}Sync now</button>${fileBtns}<button class="btn small ghost" type="button" data-c="signout">Sign out</button>` : signBtn + fileBtns}</div>`;
-    $(".nm", c).textContent = a ? a.name || a.email || "Your orchard" : "Saved on this device";
-    $(".em", c).textContent = a ? a.email : "";
-    $(".em", c).hidden = !a || !a.email;
+    $(".nm", c).textContent = a ? un || a.name || a.email || "Your orchard" : "Saved on this device";
+    $(".em", c).textContent = a ? (un ? [a.name, a.email].filter(Boolean).join(" · ") : a.email) : "";
+    $(".em", c).hidden = !$(".em", c).textContent;
     $(".st span", c).textContent = a ? cloudLabel(s) : web.known() ? s.reason || "Not signed in" : "Checking sign-in";
     const av = $(".av", c);
     if (a && a.photo) { const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = a.photo; av.appendChild(img); }
@@ -2661,7 +2667,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (screen === "title") {
       if (e.key === "Tab" || e.key === "Shift") return;
-      if (e.target && e.target.id === "webSign" && (e.key === "Enter" || e.key === " ")) return;
+      if (e.target && (e.target.id === "webSign" || (e.target.closest && e.target.closest(".un-nudge"))) && (e.key === "Enter" || e.key === " ")) return;
       e.preventDefault();
       enterHub();
       return;
@@ -2809,6 +2815,18 @@
     if (gained) note(`Star targets got friendlier: +${gained} star${gained === 1 ? "" : "s"} from your past clears`, "good");
     if (window.OrchardCloud) cloud = window.OrchardCloud.start({ backend: web, minGap: web ? () => (web.meter.slow() ? WEB_SLOW : WEB_GAP) : 0, get: () => S, replace: adoptSave, onStatus: (st) => { cloudSt = web ? web.view(st) : st; refreshCloudUi(); if (st.mode !== "connecting" && st.mode !== "saving") frostCheck(); } });
     if (web) web.on(onWeb);
+    if (window.OrchardUsername && web) {
+      window.OrchardUsername.init({
+        ic, note, confirmModal, inGame: () => screen === "game",
+        openSettings: () => {
+          closeAllModals();
+          if (screen !== "hub") enterHub({ tab: "settings" });
+          else setTab("settings", { focus: true });
+          requestAnimationFrame(() => { const c = $("#cloudCard"); if (c) c.scrollIntoView({ block: "center" }); });
+        }
+      });
+      window.OrchardUsername.on(refreshCloudUi);
+    }
     if (window.OrchardFeedback) window.OrchardFeedback.init({
       ic, web: web ? { signIn: webSignIn, glogo: GLOGO } : null,
       info: () => ({ skin: S.settings.skin, worlds: realUnlockedList().length, stars: WORLDS.reduce((n, w) => n + worldStars(w), 0) })

@@ -100,6 +100,9 @@ Sign in with Google to back up your progress and play with friends.
 
 Progress cards and challenges are end-to-end encrypted, so only the friends you choose can read them.
 
+Friends see your Google name, or "Gardener" plus your code if you switch that off. You can pick a unique **username** instead under
+**Settings > Cloud save**: 3 to 20 letters, numbers and underscores. You can change or remove it once a week.
+
 ## Screenshots
 
 <table>

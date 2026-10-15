@@ -106,10 +106,39 @@ service cloud.firestore {
     }
 
     function validPub(d) {
-      return d.keys().hasAll(['x', 'y', 'at']) && d.keys().hasOnly(['x', 'y', 'at', 'n', 's', 'q'])
+      return d.keys().hasAll(['x', 'y', 'at']) && d.keys().hasOnly(['x', 'y', 'at', 'n', 's', 'un', 'ut', 'q'])
         && b64(d.x, 43, 43) && b64(d.y, 43, 43) && d.at is number
         && (!('n' in d) || (d.n is string && d.n.size() > 0 && d.n.size() <= 40))
-        && (!('s' in d) || d.s == true);
+        && (!('s' in d) || d.s == true)
+        && (!('un' in d) || validName(d.un));
+    }
+
+    function validName(n) {
+      return n is string && n.size() >= 3 && n.size() <= 20
+        && n.matches('[A-Za-z][A-Za-z0-9]*(_[A-Za-z0-9]+)*')
+        && !(n.lower() in ['admin', 'administrator', 'mod', 'moderator', 'support', 'help', 'staff', 'official', 'orbit', 'orbitorchard', 'orchard', 'oracle', 'system',
+          'root', 'null', 'undefined', 'gardener', 'anonymous', 'everyone', 'here', 'me', 'you', 'claude', 'anthropic', 'google', 'firebase'])
+        && !n.lower().matches('.*(fuck|shit|cunt|nigg|fagg|bitch|whore|slut|nazi|twat|wank|retard).*');
+    }
+
+    function namePath(key) {
+      return /databases/$(database)/documents/names/$(key);
+    }
+
+    function pubPath(uid) {
+      return /databases/$(database)/documents/pub/$(uid);
+    }
+
+    function nameMove(d) {
+      let old = resource == null ? {} : resource.data;
+      let was = old.get('un', '');
+      let now = d.get('un', '');
+      return was == now
+        ? d.get('ut', null) == old.get('ut', null)
+        : d.get('ut', null) == request.time
+          && (!('ut' in old) || request.time >= old.ut + duration.value(7, 'd'))
+          && (now == '' || getAfter(namePath(now.lower())).data.u == request.auth.uid)
+          && (was == '' || was.lower() == now.lower() || !existsAfter(namePath(was.lower())));
     }
 
     function validCard(d) {
@@ -155,8 +184,20 @@ service cloud.firestore {
 
     match /pub/{uid} {
       allow get: if signedIn();
-      allow create, update: if signedInAs(uid) && validPub(request.resource.data) && counted(20);
-      allow delete: if signedInAs(uid);
+      allow create, update: if signedInAs(uid) && validPub(request.resource.data) && nameMove(request.resource.data) && counted(20);
+      allow delete: if signedInAs(uid) && (resource == null || !resource.data.keys().hasAny(['un', 'ut']));
+    }
+
+    match /names/{key} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['u', 'n']) && request.resource.data.keys().hasAll(['u', 'n'])
+        && request.resource.data.u == request.auth.uid
+        && validName(request.resource.data.n) && key == request.resource.data.n.lower()
+        && getAfter(pubPath(request.auth.uid)).data.get('un', '').lower() == key
+        && seated();
+      allow delete: if signedIn() && resource.data.u == request.auth.uid
+        && getAfter(pubPath(request.auth.uid)).data.get('un', '').lower() != key;
     }
 
     match /codes/{code} {

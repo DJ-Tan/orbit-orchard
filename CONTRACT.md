@@ -20,6 +20,7 @@ owner's file, code against the API in this document and note what you assumed in
 | `js/game.js` | engine agent | `window.Orchard`: canvas renderer, input, gameplay loop, visual effects, Zen/Daily generator. |
 | `orbit-orchard.html`, `js/ui.js` (plus optional `css/ui.css`) | UI agent | Page shell, all menus/tabs/pages/pop-ups, HUD, progression, saving, achievements, settings. |
 | `js/feedback.js` | UI agent | The Settings tab's Feedback card and its storage on both builds (see "Feedback"). |
+| `js/username.js` | UI agent | Web only: unique usernames, the Username row in the Settings account card and the sign-in nudge (see "Usernames (web)"). |
 
 Script load order in `orbit-orchard.html` (plain `<script src>`, no modules, no bundler):
 `js/sim.js`, `js/levels/w1.js`, `w2.js`, `w4.js`, `w3.js`, `w5.js` (display order), `js/audio.js`, `js/game.js`, `js/ui.js`, `js/friends.js`,
@@ -528,18 +529,19 @@ for players outside the artifact owner's organization, with Friends on its own F
 unchanged: `orbit-orchard.html` and its script list stay as they are, and nothing below loads there.
 
 Files: `js/backend-firebase.js` (adapter, `window.OrchardWeb`), `js/firebase-config.js` (web app config, the only file to edit
-per project), `js/friends-web.js` (Friends storage on Firestore, `window.OrchardFriendsWeb`), `css/web.css` (`js/feedback.js` is shared with claude.ai), and `firebase/`: `build.sh`, `sw.js` (service worker template), `firebase.json`, `firestore.rules`,
+per project), `js/friends-web.js` (Friends storage on Firestore, `window.OrchardFriendsWeb`), `js/username.js` (usernames, `window.OrchardUsername`), `css/web.css` (`js/feedback.js` is shared with claude.ai), and `firebase/`: `build.sh`, `sw.js` (service worker template), `firebase.json`, `firestore.rules`,
 `firestore.indexes.json`, `.firebaserc`, `SETUP.md`. `sh firebase/build.sh` writes `firebase/public/` (generated, never edit):
 a full `index.html` (doctype, head with charset, viewport, description, title, Google Fonts and `modulepreload` links for the
-SDK) made from `orbit-orchard.html`, with `js/firebase-config.js` and `js/backend-firebase.js` inserted before `js/ui.js` and
+SDK) made from `orbit-orchard.html`, with `js/firebase-config.js`, `js/backend-firebase.js` and `js/username.js` inserted before `js/ui.js` and
 `js/friends-web.js` after `js/friends.js` (the build fails if `ORCHARD_DEV` is assigned anywhere in the output); every other referenced file copied as is; and `sw.js`, which precaches the
 app, the SDK and the fonts stylesheet (network first for the site, cache first for the pinned SDK and font files), so the game
 loads and plays with no network after one visit. The Firebase JS SDK is the modular build pinned in `backend-firebase.js`
 (`https://www.gstatic.com/firebasejs/12.19.0/`), loaded with dynamic `import()`. Deploy steps are in `firebase/SETUP.md`.
 
 Adapter contract: `OrchardWeb.use(name)` stands in for `claude.use`. `use("db")` gives `doc(path)`, mapping
-`data/users/<uid>/<name>` to Firestore `users/<uid>/data/<name>` and `feedback/<uid>/m/<day>-<n>` (digits only) to the same Firestore path
-(any other path throws `invalid_argument`); the handle has
+`data/users/<uid>/<name>` to Firestore `users/<uid>/data/<name>`, and `feedback/<uid>/m/<day>-<n>` (digits only), `names/<key>` (key
+`[a-z][a-z0-9_]{2,19}`) and `pub/<uid>` (uid alphanumeric) to the same Firestore paths (any other path throws `invalid_argument`); `batch(ops)`
+commits `[path, data]` sets and `[path, null]` deletes on those paths as one metered batch (an unmapped path rejects before anything is sent); the handle has
 `get()`, `set(data)` and `onSnapshot(next, error)`, and snapshots are plain `{ id, exists, data(), metadata: { fromCache,
 hasPendingWrites } }`, never carrying `q`. The listener first claims an allowance block (`meter.ready()`), uses `includeMetadataChanges`,
 drops pending-write events and the server echo of the page's own last write, and on a cached snapshot passes it on, then reports
@@ -579,8 +581,9 @@ pause and accept, safety codes, verified badge, own-key restore), with these dif
   challenges." with the Google button. Signing in or out resets Friends' state and reconnects as the new account.
 - No name search (Firebase has no directory): friends are added by code only, and the search field is not rendered. Copy that
   mentions searching or "access to this page" is replaced ("Make one so friends can add you.", "Anyone who enters it can follow you…").
-- Names come from the friend's `pub` doc. "Show my Google name to friends" (default on) publishes the Google display name, trimmed to
-  40 characters; off, or with no name, friends see "Gardener ABC-234" (the code they added you with) and a letter avatar.
+- Names come from the friend's `pub` doc. A valid username (`un`, see "Usernames (web)") wins; otherwise "Show my Google name to friends"
+  (default on) publishes the Google display name, trimmed to 40 characters; off, or with no name, friends see "Gardener ABC-234" (the
+  code they added you with) and a letter avatar. While a username is set, `pub` carries no Google name and the switch says it doesn't apply.
 - Cards refresh at most every 30 minutes (5 when the page hides) instead of every minute; new or re-keyed recipients still get
   theirs at once. The card status says "Updates at most every 30 minutes." A refresh that needs more writes than this device can
   still get today (`meter.left()`), or a card doc at its daily cap, waits until after the reset; first cards still go out.
@@ -596,7 +599,8 @@ Layout (all encrypted values are AES-GCM with the same ECDH P-256 + HKDF pair ke
 |---|---|---|---|
 | `users/<uid>/data/{save,friends,keys,pins,chal}` | owner | owner | as on claude.ai; `keys` holds the private JWK |
 | `users/<uid>/data/sent` | owner | owner | `{ v: 1, s: { <itemId>: { t: <recipient>, k } } }`, the outbox ledger |
-| `pub/<uid>` | any signed-in user, `get` only | owner | `{ x, y, at, n?, s? }`: public key, display name, `s: true` while sharing |
+| `pub/<uid>` | any signed-in user, `get` only | owner; no delete while it holds `un` or `ut` | `{ x, y, at, n?, s?, un?, ut? }`: public key, display name, `s: true` while sharing, username and its last change (server time) |
+| `names/<key>` | any signed-in user, `get` only | create by `u` with its `pub` pointing at it; delete by `u` once its `pub` no longer does; no update | `{ u, n }`: the owner's uid and the username as typed; `key` is `n` lowercased |
 | `codes/<CODE>` | any signed-in user, `get` only | create by the uid it names; delete by that uid; no update | `{ u }` |
 | `cards/<owner>/to/<reader>` | owner and reader | owner | `{ iv, ct, at }`: the card for one reader, additional data `orchard-card-v2\|<owner>\|<reader>` |
 | `inbox/<uid>/items/<from>_<hid>` | inbox owner | create by `from`; delete by the inbox owner or `from`; no update | `{ from, kind: "chal"\|"res", iv, ct, at, k }` |
@@ -642,7 +646,7 @@ the owner only for the names `save friends keys pins chal sent`, each with `hasO
 500, chal 40 out and 70 answers, sent 300); `pub`, `codes`, `cards` and `inbox` follow the table above, with `pub` coordinates exactly
 43 base64url chars, `n` 1–40 chars and `s` only `true`, codes 6 chars from the code alphabet, card `ct` up to 4096 chars and item
 `ct` up to 2048, item `at` within a day of `request.time` and `k` after `at` by at most 22 days, and item creation needing the
-recipient's `pub` doc (one `exists()` read). `feedback/{uid}/m/{note}` allows only `create`, by the signed-in `uid`, with `note` one of
+recipient's `pub` doc (one `exists()` read). `pub` and `names` also follow "Usernames (web)". `feedback/{uid}/m/{note}` allows only `create`, by the signed-in `uid`, with `note` one of
 `<today()>-0`, `-1`, `-2` (3 a day), the caller's seat, and `validNote`: exactly `v u cat msg at` plus optional `info`, `v == 1`,
 `u == request.auth.uid`, `cat` one of the four ids, `msg` a string of 10–1000 characters with no control (other than tab and newline), bidi
 or zero-width characters, `at == request.time` (the client sends `serverTimestamp()`), and `info` a map with `ver` (string, 1–12) and only the
@@ -665,7 +669,7 @@ Daily allowance (keeps the Spark quota of 20,000 writes and deletes, 50,000 read
   listener overrun. Constants: `ALLOW` and `CAPS` in `js/backend-firebase.js`, mirrored by `400`, `4` and the caps in the rules.
 - Counting (`OrchardWeb.meter`, per account and browser): setDoc/deleteDoc 1 write, a batch its op count, a claim 2 writes and 6 reads;
   a get 1 read, a list `max(1, docs)`, a doc listener 1 per server snapshot whose data changed, a query listener `max(1, docs)` then
-  its doc changes; plus 1 rule read for the first counter of a doc each day, 1 for a code or feedback create and 2 for an inbox create.
+  its doc changes; plus 1 rule read for the first counter of a doc each day, 1 for a code or feedback create and 2 for an inbox or names create.
   Counts live in localStorage (`oo.meter.<uid>.<page>` per page load, summed for the day), so a reload or another tab of the same
   browser keeps using today's blocks. Before a write the meter takes the allowance, claiming a block if needed; with none to claim
   the write is refused with `resting` and nothing is sent. Listener reads can't be refused: when they pass the allowance and no block
@@ -702,5 +706,42 @@ project owner. `frshots` seeds two players with an open challenge (`friends.html
 (`shot=friends-out|friends-in`, `who=alice|bob`, `safe=first`, `scroll=`). `FF_CA` adds root CAs to the throwaway Firefox profiles
 when the network intercepts TLS. `feedback.html` runs the Feedback card on two origins
 (signed out, three notes with XSS strings checked in Firestore and rendered as text, the 4th refused, a second device refused by the rules,
-direct reads, updates and deletes denied, offline keeps the draft, resting wording, no console errors). `dev/web/user.js` raises Firefox's per-host connection limit, because three Firestore clients'
+direct reads, updates and deletes denied, offline keeps the draft, resting wording, no console errors). `username.html` runs usernames on three
+origins (see "Usernames (web)"); `username.html?seed=1` stops once Bob has Alice's challenge, and `unshots` takes the username screenshots. `dev/web/user.js` raises Firefox's per-host connection limit, because three Firestore clients'
 long-polls to one emulator otherwise fill the default 6 and stall writes for 20–30 s.
+
+## Usernames (web) (`js/username.js` → `window.OrchardUsername`)
+
+Web build only; claude.ai keeps its profile names and never loads the file. A signed-in player may pick one unique username.
+- Rules: 3–20 characters, `[A-Za-z][A-Za-z0-9]*(_[A-Za-z0-9]+)*` (starts with a letter, no double or trailing underscore). Display case is
+  kept; uniqueness is case-insensitive through the lowercase key. Refused: the reserved names in `RESERVED` and any key containing a `BLOCK`
+  entry. `check(v)` trims ASCII whitespace, applies NFC and rejects (never strips) anything else, so look-alike letters, zero-width and bidi
+  characters fail. `shown(v)` accepts a stored name only when it is exactly valid. Both lists and the shape are mirrored in `validName` in
+  the rules (a unit test compares them).
+- Storage: `pub/<uid>.un` (the username) and `pub/<uid>.ut` (server time of the last claim, change or removal), and `names/<key>` `{ u, n }`.
+  Friends already read `pub`, so showing a username costs no reads. Every claim, change or removal is one batch (`plan()`): `pub` with the new
+  `un` (or none) and `ut = serverTimestamp()`, the new `names` doc, and the old `names` doc deleted. A capitals-only change rewrites `pub` only.
+  Other `pub` writes (Friends) carry `un` and `ut` over unchanged (`carry()`, fed by the module's read and Friends' `pub` snapshots).
+- Rules: `nameMove` on `pub`: `un`/`ut` unchanged, or `ut == request.time`, at least 7 days after the stored `ut` (none stored: the first
+  claim is free), the new key's `names` doc owned by the caller after the write (`getAfter`), and the old key's doc gone (`existsAfter`)
+  unless only the capitals changed. `names` create: exactly `u n`, `u` the caller, `validName(n)`, id equal to `n.lower()`, the caller's
+  `pub.un` pointing at it after the write, and the caller's seat; delete: by `u`, once `pub.un` no longer points at it. So a player holds at most
+  one name, can't point `pub` at a name they don't own, and can't free anyone else's. `pub` can't be deleted while it holds `un` or `ut`.
+- Weekly limit: after any claim, change or removal the next one waits 7 × 86,400,000 ms from `ut`. The row then disables Change (or Choose)
+  and says "You can change your username again on <local date and time>" ("choose a username again" after a removal); the editor warns "You won't
+  be able to change it again for 7 days."
+- UI: `ui.js` renders the web cloud card as `.cc-top` (identity), `.un-box` (built once by `OrchardUsername.render`) and `.cc-bot`, so status
+  repaints don't reset the editor. The row shows the username or "No username yet" with Choose/Change; the editor has live checks (the rule,
+  each refusal, "Checking…", "Available", "That name is taken", "Only the capitals change"), Save, Cancel and Remove (confirmed in a modal).
+  Availability is one `get` on `names/<key>`, debounced 450 ms and cached for 20 s. The account card shows the username, then the Google name and
+  email. Everything user-supplied is set with `textContent` or `value`.
+- Nudge: after sign-in, a player without a username (and not locked) sees "Pick a username so friends can recognise you" with "Choose a
+  username" (opens Settings with the editor focused) and a dismiss button, at the bottom of the title or hub, hidden in game. Either button
+  stores `orbit-orchard-username-nudge` `{ <uid>: 1 }` (try/catch), so it doesn't come back for that account.
+- Friends: `friends-web.js` shows `shown(pub.un) || pub.n` for others and the player's own username for themselves; invalid names fall back
+  to today's behaviour. Allowance: a `names` create counts 2 rule reads; a claim batch is 2 or 3 writes.
+
+Tests: `node dev/username/test-username.js` (validator, look-alikes, invisible characters, reserved and blocklist, `plan()` batches, the lock,
+the rules mirroring the lists); rules in `dev/web/rules-test.js` (`usernames`: claim, change with release, capitals-only, removal, collisions,
+other players' names, two names, unowned pointers, invalid and refused names, updates, lists, the 7-day lock with backdated `ut`, signed out,
+no seat); `dev/web/test-meter.js` (mapping and batch counts); browser `sh dev/web/run.sh username` and screenshots `sh dev/web/run.sh unshots`.

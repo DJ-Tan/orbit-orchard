@@ -277,6 +277,70 @@
       localStorage.setItem(k, JSON.stringify(Object.assign(i, { d: OrchardWeb.meter.today(), rest: on ? "self" : null, at: Date.now() })));
       return T.fbOpen();
     },
+    async unOpen() {
+      await T.settings();
+      await waitFor(() => OrchardWeb.known() && (!OrchardWeb.account() || OrchardUsername.status().known), 15000);
+      await sleep(100);
+      return T.un();
+    },
+    un() {
+      const s = window.OrchardUsername ? OrchardUsername.status() : {}, box = $("#cloudCard .un-box"), txt = (e) => (e && !e.hidden ? e.textContent.replace(/\s+/g, " ").trim() : "");
+      const btn = (sel) => { const b = $(sel); return b ? { text: b.textContent.trim(), on: !b.hidden && !b.disabled, shown: !b.hidden } : { text: "", on: false, shown: false }; };
+      let nud = null;
+      try { nud = JSON.parse(localStorage.getItem("orbit-orchard-username-nudge") || "null"); } catch (e) { nud = null; }
+      return Object.assign({}, s, {
+        box: !!box && !box.hidden, cur: txt($(".un-cur")), lock: txt($(".un-lock")), edit: btn("[data-u=edit]"), save: btn("[data-u=save]"), remove: btn("[data-u=remove]"),
+        st: txt($("#unSt")), tone: ($("#unSt") || { dataset: {} }).dataset.tone || "", warn: txt($("#unWarn")), flashLine: txt($("#unFlash")), field: ($("#unIn") || {}).value,
+        focus: document.activeElement && document.activeElement.id, nm: txt($("#cloudCard .nm")), em: txt($("#cloudCard .em")), nudgeText: txt($(".un-nudge p")), nudged: nud,
+        injected: $$("#cloudCard .un-box img, #cloudCard .un-box script, #cloudCard .un-box iframe, #cloudCard .un-box [onerror], .un-nudge img").length,
+        alerts: window.__alerts || 0, tab: T.state().tab, screen: T.state().screen, errs: window.__errs.slice()
+      });
+    },
+    async unType(v) {
+      window.alert = () => { window.__alerts = (window.__alerts || 0) + 1; };
+      if (!$("#unIn") || !$("#unIn").offsetParent) await T.unOpen();
+      if (!OrchardUsername.status().editing) OrchardUsername.open();
+      const i = $("#unIn");
+      if (!i) return T.un();
+      i.value = v;
+      i.dispatchEvent(new Event("input", { bubbles: true }));
+      await sleep(50);
+      await waitFor(() => !/Checking/.test(($("#unSt") || {}).textContent || ""), 8000);
+      return T.un();
+    },
+    async unSave(v, force) {
+      if (v !== undefined) await T.unType(v);
+      const b = $("[data-u=save]");
+      if (!b || (b.disabled && !force)) return Object.assign(T.un(), { clicked: false });
+      b.disabled = false;
+      b.click();
+      await sleep(50);
+      await waitFor(() => !OrchardUsername.status().busy, 20000);
+      await sleep(300);
+      return Object.assign(T.un(), { clicked: true });
+    },
+    async unRemove() {
+      if (!$("#unIn") || !$("#unIn").offsetParent) await T.unOpen();
+      if (!OrchardUsername.status().editing) OrchardUsername.open();
+      const b = $("[data-u=remove]");
+      if (!b || b.disabled || b.hidden) return Object.assign(T.un(), { clicked: false });
+      b.click();
+      await waitFor(() => $(".modal [data-a=yes]"), 3000);
+      $$(".modal [data-a=yes]").pop().click();
+      await sleep(50);
+      await waitFor(() => !OrchardUsername.status().busy, 20000);
+      await sleep(300);
+      return Object.assign(T.un(), { clicked: true });
+    },
+    async unCancel() { await T.click("[data-u=cancel]"); return T.un(); },
+    async unNudge(act) {
+      await waitFor(() => $(".un-nudge"), 10000);
+      const b = $(".un-nudge [data-n=" + act + "]");
+      if (b) b.click();
+      await sleep(400);
+      return T.un();
+    },
+    async unWaitNudge(ms) { await waitFor(() => $(".un-nudge"), ms || 10000); return T.un(); },
     async signOut() { await OrchardWeb.signOut(); await waitFor(() => !OrchardWeb.account(), 5000); await sleep(400); return T.fr(); },
     async waitCaches() {
       for (let i = 0; i < 100; i++) { const ks = await caches.keys(); if (ks.length && (await (await caches.open(ks[0])).keys()).length >= 15) return ks; await sleep(200); }
@@ -324,6 +388,18 @@
       await sleep(300);
       $("#fbCard").previousElementSibling.scrollIntoView({ block: q.get("fbat") || "start", behavior: "instant" });
     }
+    if (/^username/.test(name)) {
+      await T.unOpen();
+      if (q.get("skin")) { const p = $("[data-pick=" + q.get("skin") + "]"); if (p) p.click(); }
+      const u = q.get("un") || "";
+      if (u === "set") await T.unSave("Sam_Gardener");
+      if (u === "edit") await T.unType("Sam_Gardener");
+      if (u === "bad") await T.unType("<img src=x onerror=alert(1)>");
+      if (u === "taken") await T.unType("alice_orchard");
+      await sleep(300);
+      $("#cloudCard .un-box").scrollIntoView({ block: "center", behavior: "instant" });
+    }
+    if (/^nudge/.test(name)) await T.unWaitNudge(15000);
     if (/^trophies/.test(name)) { await T.enterHub(); key(String(T.state().tabs.indexOf("trophies") + 1)); }
     if (/-in$/.test(name)) await T.waitCloud("synced");
     if (/^friends/.test(name)) {
@@ -334,10 +410,11 @@
       if (q.get("safe")) { const r = $(".fr-row"); await T.frSafe(q.get("safe") === "first" && r ? r.dataset.id : q.get("safe")); $(".fr-safe").scrollIntoView({ block: "center", behavior: "instant" }); }
     }
     await sleep(800);
-    if ($("#cloudCard") && !/^feedback/.test(name)) $("#cloudCard").scrollIntoView({ block: "center", behavior: "instant" });
+    if ($("#cloudCard") && !/^(feedback|username)/.test(name)) $("#cloudCard").scrollIntoView({ block: "center", behavior: "instant" });
     if (q.get("scroll")) { const e = $(q.get("scroll")); if (e) e.scrollIntoView({ block: "start", behavior: "instant" }); }
+    if (!/^nudge/.test(name) && $(".un-nudge")) $(".un-nudge").remove();
     await sleep(100);
-    console.log("[t] SHOT " + name + " " + JSON.stringify(/^friends/.test(name) ? T.fr() : /^feedback/.test(name) ? T.fb() : { state: T.state(), card: T.card() }));
+    console.log("[t] SHOT " + name + " " + JSON.stringify(/^friends/.test(name) ? T.fr() : /^feedback/.test(name) ? T.fb() : /^(username|nudge)/.test(name) ? T.un() : { state: T.state(), card: T.card() }));
     fetch("/__release?k=" + encodeURIComponent(q.get("k") || name));
   }
 

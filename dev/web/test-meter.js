@@ -293,6 +293,17 @@ function game(p, gap) {
     ok(S.docs[fp] && !("q" in S.docs[fp]) && f1.w - f0.w === 1 && f1.r - f0.r === 1, "a feedback note maps to feedback/<uid>/m/<day>-<n>, carries no q and counts 1 write and 1 seat read", [S.docs[fp], f0, f1]);
     const bad = ["feedback/fi/m/hello", "feedback/fi/m/" + d + "-0/x", "feedback/fi/x/" + d + "-0", "feedback/fi/m/../save"].filter((p) => { try { db.doc(p); return true; } catch (e) { return e.code !== "invalid_argument"; } });
     ok(!bad.length, "the adapter refuses feedback paths that aren't <day>-<n>", bad);
+    S.docs["pub/fi"] = { x: "x", y: "y", at: 1, q: { d, n: 1 } };
+    const pg = await db.doc("pub/fi").get(), u0 = A.M.state();
+    await db.batch([["pub/fi", { x: "x", y: "y", at: 2, un: "Fi_1", ut: 1 }], ["names/fi_1", { u: "fi", n: "Fi_1" }], ["names/old_fi", null]]);
+    const u1 = A.M.state();
+    ok(!("q" in pg.data()) && S.docs["pub/fi"].q.n === 2 && S.docs["pub/fi"].un === "Fi_1" && S.docs["names/fi_1"].u === "fi" && !("q" in S.docs["names/fi_1"]) && u1.w - u0.w === 3 && u1.r - u0.r === 2,
+      "a username batch maps pub/<uid> and names/<key>, puts q only on pub and counts 3 writes and 2 rule reads", [S.docs["pub/fi"], S.docs["names/fi_1"], u0, u1]);
+    const badN = ["names/Fi_1", "names/ab", "names/" + "a".repeat(21), "names/1fi", "names/fi/x", "names/../save", "names/f\u0131x", "pub/../x", "pub/a b", "pub/fi/x", "names", "pub"].filter((p) => { try { db.doc(p); return true; } catch (e) { return e.code !== "invalid_argument"; } });
+    ok(!badN.length, "the adapter refuses names keys that aren't lowercase ids and pub paths that aren't one uid", badN);
+    let be = null;
+    await db.batch([["names/Fi_1", { u: "fi", n: "Fi_1" }]]).catch((e) => { be = e; });
+    ok(be && be.code === "invalid_argument" && !S.docs["names/Fi_1"], "a batch with an unmapped path is refused before anything is sent", be);
     const seen = [];
     const un = A.M.listen(A.ref("users/fi/data/friends"), (s) => seen.push(s), () => {});
     await sleep(20);

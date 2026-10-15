@@ -1,5 +1,5 @@
 #!/bin/sh
-# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|trophies|feedback|fbshots|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
+# usage: run.sh flow|offline|rest|restshots|device2|shots|cards|friends|frshots|trophies|feedback|fbshots|username|unshots|all (emulators running, dev/friends/serve.py on WPORT; FF_CA adds root CAs to the test profile)
 cd "$(dirname "$0")"
 mkdir -p shots/dl
 PORT=${WPORT:-8771}
@@ -72,6 +72,40 @@ case "$1" in friends|frshots|all)
   sleep 1
   if [ "$1" = frshots ]; then ff frseed 1400x1000 "$BASE/friends.html?seed=1" 300; else ff friends 1400x1000 "$BASE/friends.html" 600; fi
   kill $! 2>/dev/null
+  ;;
+esac
+case "$1" in username|all)
+  python3 killable.py ../.. 8773 &
+  sleep 1
+  for i in 1 2 3 4; do
+    R=$(ff username 1400x1000 "$BASE/username.html" 600)
+    echo "$R" | grep -q "WEBUN \(PASS [0-9]* checks\|FAIL [0-9]* of [0-9]*\)" && break
+    echo "run $i ended before the summary, retrying" >&2
+  done
+  echo "$R"
+  kill $! 2>/dev/null
+  ;;
+esac
+case "$1" in unshots)
+  wipe() { curl -s -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/demo-orbit-orchard/databases/(default)/documents" > /dev/null; }
+  for W in 1280x800 400x800; do
+    N=${W%%x*}
+    wipe
+    ff un-edit-$N $W "$BASE/site/index.html?emu=1&shot=username-in&un=edit"
+    ff un-bad-$N $W "$BASE/site/index.html?emu=1&shot=username-in&un=bad&skin=daylight"
+    ff un-set-$N $W "$BASE/site/index.html?emu=1&shot=username-in&un=set&skin=synthwave"
+    wipe
+    ff un-nudge-$N $W "$BASE/site/index.html?emu=1&shot=nudge-in&who=bob"
+  done
+  python3 killable.py ../.. 8773 &
+  sleep 1
+  ff unseed 1400x1000 "$BASE/username.html?seed=1" 300
+  kill $! 2>/dev/null
+  for W in 1280x800 400x800; do
+    N=${W%%x*}
+    ff un-taken-$N $W "$BASE/site/index.html?emu=1&shot=username-in&un=taken&skin=inkwell"
+    ff un-friend-$N $W "$BASE/site/index.html?emu=1&shot=friends-in&who=bob"
+  done
   ;;
 esac
 case "$1" in frshots)

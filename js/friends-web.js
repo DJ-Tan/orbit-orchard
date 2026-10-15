@@ -30,7 +30,10 @@
   const off = () => navigator.onLine === false;
   const offline = () => Promise.reject({ code: "unavailable", message: "offline" });
   const mapErr = (map) => (e) => ({ code: map[e && e.code] || "unavailable", message: (e && e.message) || "" });
-  const metaOf = (d) => ({ n: isObj(d) && typeof d.n === "string" ? d.n.trim().slice(0, 40) : "", s: !!(isObj(d) && d.s) });
+  const U = () => root.OrchardUsername || null;
+  const unOf = (d) => (U() && isObj(d) ? U().shown(d.un) : "");
+  const metaOf = (d) => ({ n: isObj(d) && typeof d.n === "string" ? d.n.trim().slice(0, 40) : "", s: !!(isObj(d) && d.s), u: unOf(d) });
+  const shownOf = (m) => (m ? m.u || m.n : "");
   const cardOf = (d) => (isObj(d) && b64ok(d.iv, 16) && ctOk(d.ct, CARD_CT) && num(d.at) > 0 ? { iv: d.iv, ct: d.ct, at: d.at } : null);
   const face = (name) => "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#2b2f55"/><text x="20" y="26" font-size="16" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#cfd3ff">' + ((name || "G").trim()[0] || "G").toUpperCase().replace(/[<&>"']/g, "") + "</text></svg>");
 
@@ -68,7 +71,8 @@
     }
 
     const myName = () => {
-      const a = W.account();
+      const a = W.account(), un = U() ? U().mine(F.me) : "";
+      if (un) return un;
       if (K.nameOn() && a && a.name && a.name.trim()) return a.name.trim().slice(0, 40);
       return F.fr.code ? "Gardener " + K.fmtCode(F.fr.code.c) : "";
     };
@@ -77,7 +81,7 @@
         ids = [].concat(ids).filter(K.validId);
         return Promise.all(ids.map((id) => (id === F.me ? null : askPub(id)))).then(() => {
           const o = {};
-          ids.forEach((id) => { const n = id === F.me ? myName() : (meta[id] && meta[id].n) || ""; o[id] = { id, name: n, avatarUrl: face(n), isMe: id === F.me }; });
+          ids.forEach((id) => { const n = id === F.me ? myName() : shownOf(meta[id]); o[id] = { id, name: n, avatarUrl: face(n), isMe: id === F.me }; });
           return o;
         });
       }
@@ -177,7 +181,7 @@
         L.u.push(listen(fs.doc(db, "pub", id), (s) => {
           const d = s.exists ? s.data() : null, k = d && pubIn(id, d);
           meta[id] = metaOf(d); known[id] = 1; pubAt[id] = Date.now();
-          F.names[id] = meta[id].n;
+          F.names[id] = shownOf(meta[id]);
           if (k) F.pubs[id] = k; else delete F.pubs[id];
           if (L.wait) { L.wait = false; F.keysWait--; }
           cardState(id);
@@ -379,18 +383,27 @@
       if (retry) throw retry;
     });
 
+    /** A Firestore timestamp from a live or JSON-copied one. */
+    const stampOf = (v) => (v && typeof v.toMillis === "function" ? v : isObj(v) && Number.isInteger(v.seconds) && Number.isInteger(v.nanoseconds) && fs ? new fs.Timestamp(v.seconds, v.nanoseconds) : null);
+
     function pubDoc() {
-      const d = { x: F.key.x, y: F.key.y, at: Date.now() }, a = W.account();
-      if (K.nameOn() && a && a.name && a.name.trim()) d.n = a.name.trim().slice(0, 40);
+      const d = { x: F.key.x, y: F.key.y, at: Date.now() }, a = W.account(), c = U() ? U().carry(F.me) : null, t = c && stampOf(c.ut);
+      if (!(c && c.un) && K.nameOn() && a && a.name && a.name.trim()) d.n = a.name.trim().slice(0, 40);
       if (F.fr.share.on && F.cx) d.s = true;
+      if (c && typeof c.un === "string") d.un = c.un;
+      if (t) d.ut = t;
       return d;
     }
 
     /** Name and sharing flag of a pub doc, or the wanted ones when called without a doc. */
     function pubMeta(d) {
       if (d === undefined) return F.frReady ? K.canon(metaOf(pubDoc())) : F.pubMeta;
+      if (U() && isObj(d)) U().seen(F.me, d);
       return K.canon(metaOf(d));
     }
+
+    const nameTx = () => (U() && U().mine(F.me) ? "You have a username, so friends see that instead. This switch only matters if you remove it." : "");
+    if (U()) U().on(() => { if (F.me) { delete F.names[F.me]; K.renderSoon(); } });
 
     W.on((kind) => {
       if (kind === "auth") { gen++; K.reset(); K.status("off"); codeMine = null; connect(); }
@@ -405,7 +418,7 @@
 
     return {
       connect, refs, subs, loaded, down, pubIn, pubDoc, meta: pubMeta, resubCards, readCard, writeCard, delCard, ensureCode, makeCode, findCode, readChals, pushWire,
-      gap: CARD_GAP, anon: (code) => (code ? "Gardener " + K.fmtCode(code) : "Gardener"), tx: TX, search: false,
+      gap: CARD_GAP, anon: (code) => (code ? "Gardener " + K.fmtCode(code) : "Gardener"), tx: TX, search: false, nameTx,
       signIn: hooks.signIn || null, busy: () => !!W.busy(), glogo: hooks.glogo || ""
     };
   };

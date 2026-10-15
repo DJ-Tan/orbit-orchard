@@ -1230,7 +1230,7 @@
         <section class="sheet fr-sec" aria-labelledby="frCaH"><div class="fr-h"><h3 id="frCaH">Your progress card</h3></div>
           <div class="toggle"><div class="t"><b id="frLblShare">Share my progress with people I follow</b><span>Only people you follow can see your stars, plots, worlds, golden badges, Daily streak, trophies and the last day you played. Off until you switch it on; off deletes it.</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-f="share" aria-labelledby="frLblShare"></button></div>
           <div class="toggle"><div class="t"><b id="frLblNectar">Include nectar</b><span>Add your nectar balance to the card.</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-f="nectar" aria-labelledby="frLblNectar"></button></div>
-          ${B.meta ? `<div class="toggle"><div class="t"><b id="frLblName">Show my Google name to friends</b><span>When off, friends see “Gardener” and your friend code.</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-f="name" aria-labelledby="frLblName"></button></div>` : ""}
+          ${B.meta ? `<div class="toggle"><div class="t"><b id="frLblName">Show my Google name to friends</b><span id="frNameTx">When off, friends see “Gardener” and your friend code.</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-f="name" aria-labelledby="frLblName"></button></div>` : ""}
           <div id="frCard"></div></section>
         <section class="sheet fr-sec" id="frAdd" aria-labelledby="frAdH"><div class="fr-h"><h3 id="frAdH">Add a friend</h3></div>
           ${B.search ? `<div class="field"><label for="frQ">Search your organization</label><input class="text-in" id="frQ" type="search" autocomplete="off" spellcheck="false" placeholder="Name"></div>
@@ -1388,7 +1388,11 @@
     n.setAttribute("aria-checked", on && F.fr.share.nectar ? "true" : "false");
     n.disabled = !on;
     const nm = $("[data-f=name]", body);
-    if (nm) nm.setAttribute("aria-checked", nameOn() ? "true" : "false");
+    if (nm) {
+      nm.setAttribute("aria-checked", nameOn() ? "true" : "false");
+      const t = B.nameTx ? B.nameTx() : "";
+      $("#frNameTx", body).textContent = t || "When off, friends see “Gardener” and your friend code.";
+    }
     const c = cleanCard(F.me, cardBody()), st = cardStatus();
     $("#frCard", body).innerHTML = `<div class="fr-preview${on ? " on" : ""}"><div class="fr-who">${av(F.me)}<div><b>${who(F.me)}</b><span class="muted small">${esc(st)}</span></div></div>${c ? statsHtml(c) : ""}</div>`;
   }

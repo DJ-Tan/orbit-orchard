@@ -158,11 +158,11 @@ t("local day and reset for the claude.ai build", () => {
   assert.strictEqual(F.localDay(F.localReset(t0)), 20261015);
 });
 
-t("claude.ai rules: players create only their own feedback, nobody but the owner reads it", () => {
+t("claude.ai rules: players read and write only their own feedback, the owner reads all of it", () => {
   const ok = (uid, lv, p, op) => R.allowed(R.RULES, uid, lv, p, op);
   assert.ok(ok("u_a", "interact", "feedback/u_a/m/20261014-abc", "write"));
-  assert.ok(!ok("u_a", "interact", "feedback/u_a/m/20261014-abc", "read"));
-  assert.ok(!ok("u_a", "interact", "feedback/u_a/m", "read"));
+  assert.ok(ok("u_a", "interact", "feedback/u_a/m/20261014-abc", "read"));
+  assert.ok(ok("u_a", "interact", "feedback/u_a/m", "read"));
   assert.ok(!ok("u_b", "interact", "feedback/u_a/m/20261014-abc", "read"));
   assert.ok(!ok("u_b", "interact", "feedback/u_a/m/20261014-abc", "write"));
   assert.ok(!ok("u_b", "admin", "feedback/u_a/m/20261014-abc", "read"));

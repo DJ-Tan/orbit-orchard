@@ -10,3 +10,28 @@ svg.glogo { width: 18px; height: 18px; flex: none; }
 .web-rest[hidden] { display: none; }
 .cc-id .st { align-items: baseline; }
 .cc-id .st .cdot { flex: none; }
+.cc-top, .cc-bot { display: contents; }
+.un-box { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); border: 1.5px solid var(--line); }
+.un-box[hidden] { display: none; }
+.un-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.un-txt { display: grid; gap: 2px; min-width: 0; }
+.un-cur { font-family: var(--mono); font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.un-cur.none { font-family: var(--body); font-weight: 700; color: var(--dim); }
+.un-lock[hidden], .un-edit[hidden], .un-flash[hidden], .un-row [hidden] { display: none; }
+.un-edit { display: grid; gap: 10px; }
+.un-edit .text-in { color: var(--text); max-width: 26em; }
+.un-edit .text-in[aria-invalid="true"] { border-color: var(--bad); }
+.un-st, .un-flash { margin: 0; font-size: 14px; font-weight: 700; }
+.un-st[data-tone="info"], .un-flash[data-tone="info"] { color: var(--dim); font-weight: 400; }
+.un-st[data-tone="good"], .un-flash[data-tone="good"] { color: var(--good); }
+.un-st[data-tone="bad"], .un-flash[data-tone="bad"] { color: var(--bad); }
+.un-warn { margin: 0; }
+.un-nudge { position: fixed; left: 16px; right: 16px; bottom: calc(var(--safe-b) + 20px); margin: 0 auto; z-index: 57; max-width: 460px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: var(--r-lg); background: var(--surface); border: 1.5px solid var(--accent); box-shadow: var(--shadow); animation: nfx-in .45s var(--ease-pop) both; }
+.un-nudge p { margin: 0; flex: 1 1 180px; min-width: 0; font-size: 14px; font-weight: 700; }
+.un-nudge .row { flex: none; flex-wrap: nowrap; gap: 6px; margin: 0; }
+.un-nudge .un-x { min-width: 36px; padding: 8px; }
+.un-nudge .un-x svg.i { width: 18px; height: 18px; }
+@media (max-width: 720px) {
+  .un-nudge { bottom: calc(var(--safe-b) + 84px); flex-wrap: wrap; }
+  .un-nudge .row { flex: 1 1 auto; justify-content: space-between; }
+}

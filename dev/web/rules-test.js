@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where, runTransaction, writeBatch, serverTimestamp } = require("firebase/firestore");
+const { doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where, runTransaction, writeBatch, serverTimestamp, Timestamp } = require("firebase/firestore");
 const C = require("../../js/cloud.js");
 const G = require("./gen-dst.js");
 
@@ -315,6 +315,119 @@ async function feedback(env, alice, bob, anon) {
   await check("feedback: the project owner (Admin access) reads the stored note", stored && stored.msg.length === 1000 && stored.info.ua === "Firefox" && stored.at && typeof stored.at.toMillis === "function" ? Promise.resolve() : Promise.reject(new Error(JSON.stringify(stored))));
 }
 
+async function usernames(env, anon) {
+  const db = (u) => env.authenticatedContext(u).firestore();
+  const ua = db("una"), ub = db("unb"), uc = db("unc"), ud = db("und"), ue = db("une");
+  const seed = (p, d) => env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), p), d));
+  const read = (p) => { let v = null; return env.withSecurityRulesDisabled(async (c) => { const s = await getDoc(doc(c.firestore(), p)); v = s.exists() ? s.data() : null; }).then(() => v); };
+  const fact = (name, c, extra) => check(name, c ? Promise.resolve() : Promise.reject(new Error(JSON.stringify(extra === undefined ? null : extra))));
+  /** One batch: pub/<uid> with the given un/ut, plus names creates and deletes. */
+  const move = (d, uid, o) => {
+    const w = writeBatch(d), q = qNext("pub/" + uid), body = { x: X, y: Y, at: Date.now(), q };
+    if (o.un !== undefined) body.un = o.un;
+    if (o.ut !== undefined) body.ut = o.ut;
+    if (o.n) body.n = o.n;
+    if (o.pub !== false) w.set(doc(d, "pub/" + uid), Object.assign(body, o.extra || {}));
+    (o.add || []).forEach((a) => w.set(doc(d, "names/" + (a.key || a.n.toLowerCase())), a.doc || { u: a.u || uid, n: a.n }));
+    (o.del || []).forEach((k) => w.delete(doc(d, "names/" + k)));
+    return w.commit().then(() => { if (o.pub !== false) Q["pub/" + uid] = q.n; });
+  };
+  const stamp = serverTimestamp;
+  const utOf = async (uid) => (await read("pub/" + uid)).ut;
+  const backdate = async (uid, ms) => { const d = await read("pub/" + uid); d.ut = Timestamp.fromMillis(Date.now() - ms); await seed("pub/" + uid, d); };
+  const WEEK = 7 * DAYMS;
+
+  for (const [d, u] of [[ua, "una"], [ub, "unb"], [uc, "unc"], [ud, "und"]]) {
+    await check("names: " + u + " claims a block", assertSucceeds(claim(d, u)));
+    await check("names: " + u + " publishes a pub doc without a username", assertSucceeds(put(d, "pub/" + u, { x: X, y: Y, at: 1, n: "Google Name" })));
+  }
+
+  await check("names: first claim (pub un + names doc in one batch) accepted", assertSucceeds(move(ua, "una", { un: "Alice_1", ut: stamp(), add: [{ n: "Alice_1" }] })));
+  const n1 = await read("names/alice_1"), p1 = await read("pub/una");
+  await fact("names: names/alice_1 is { u, n } with the display case kept", n1 && n1.u === "una" && n1.n === "Alice_1" && Object.keys(n1).sort().join() === "n,u", n1);
+  await fact("names: pub carries un and a server-time ut", p1.un === "Alice_1" && p1.ut && typeof p1.ut.toMillis === "function" && Math.abs(p1.ut.toMillis() - Date.now()) < 120000, p1);
+  await check("names: a pub rewrite keeping un and ut accepted", assertSucceeds(move(ua, "una", { un: "Alice_1", ut: p1.ut, extra: { s: true } })));
+  await check("names: a pub rewrite dropping un without releasing the name denied", assertFails(move(ua, "una", { ut: p1.ut })));
+  await check("names: a pub rewrite dropping ut denied", assertFails(move(ua, "una", { un: "Alice_1" })));
+  await check("names: a pub rewrite moving ut alone denied", assertFails(move(ua, "una", { un: "Alice_1", ut: stamp() })));
+  await check("names: a pub rewrite with a forged older ut denied", assertFails(move(ua, "una", { un: "Alice_1", ut: Timestamp.fromMillis(Date.now() - 30 * DAYMS) })));
+  await check("names: a partial pub update of un denied", assertFails(updateDoc(doc(ua, "pub/una"), { un: "Alice_9", q: qNext("pub/una") })));
+  await check("names: owner deleting a pub doc that holds a username denied", assertFails(deleteDoc(doc(ua, "pub/una"))));
+
+  await check("names: signed-in user gets a names doc", assertSucceeds(getDoc(doc(ub, "names/alice_1"))));
+  await check("names: signed-in user gets a missing names doc (availability)", assertSucceeds(getDoc(doc(ub, "names/nobody_here"))));
+  await check("names: signed out can't get", assertFails(getDoc(doc(anon, "names/alice_1"))));
+  await check("names: listing denied", assertFails(getDocs(collection(ub, "names"))));
+  await check("names: owner listing denied", assertFails(getDocs(collection(ua, "names"))));
+  await check("names: query by owner denied", assertFails(getDocs(query(collection(ua, "names"), where("u", "==", "una")))));
+
+  await check("names: same name in other capitals (case-insensitive collision) denied", assertFails(move(ub, "unb", { un: "ALICE_1", ut: stamp(), add: [{ n: "ALICE_1" }] })));
+  await check("names: taking someone else's names doc denied", assertFails(move(ub, "unb", { un: "Alice_1", ut: stamp(), add: [{ n: "Alice_1" }] })));
+  await check("names: pointing pub at someone else's name denied", assertFails(move(ub, "unb", { un: "Alice_1", ut: stamp() })));
+  await check("names: pointing pub at a name nobody holds denied", assertFails(move(ub, "unb", { un: "Ghost", ut: stamp() })));
+  await check("names: deleting someone else's name denied", assertFails(deleteDoc(doc(ub, "names/alice_1"))));
+  await check("names: deleting someone else's name inside a claim denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby" }], del: ["alice_1"] })));
+  await check("names: holding two names in one batch denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby" }, { n: "Bobby2" }] })));
+  await check("names: a names doc without pub pointing at it denied", assertFails(move(ub, "unb", { pub: false, add: [{ n: "Bobby" }] })));
+  await check("names: a names doc naming another user denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby", u: "una" }] })));
+  await check("names: key that isn't the lowercase of n denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ key: "bobbx", n: "Bobby" }] })));
+  await check("names: key in capitals denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ key: "Bobby", n: "Bobby" }] })));
+  await check("names: names doc with an extra key denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby", doc: { u: "unb", n: "Bobby", at: 1 } }] })));
+  await check("names: names doc without n denied", assertFails(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby", doc: { u: "unb" } }] })));
+  await check("names: claim with a client clock ut denied", assertFails(move(ub, "unb", { un: "Bobby", ut: Timestamp.now(), add: [{ n: "Bobby" }] })));
+  await check("names: claim without ut denied", assertFails(move(ub, "unb", { un: "Bobby", add: [{ n: "Bobby" }] })));
+  for (const bad of ["bo", "a".repeat(21), "bob smith", "\u0430dmin", "b\u043Eb", "bob\u200B", "\u202Ebob", "bob_", "b__b", "1bob", "_bob", "<b>x</b>", "x\"><img>"]) {
+    await check("names: invalid " + JSON.stringify(bad) + " in pub and names denied", assertFails(move(ub, "unb", { un: bad, ut: stamp(), add: [{ n: bad, key: bad.toLowerCase().replace(/\//g, "_") }] })));
+  }
+  await check("names: a username that isn't a string denied", assertFails(move(ub, "unb", { un: 42, ut: stamp() })));
+  for (const bad of ["Admin", "GARDENER", "orbitorchard", "Claude", "Firebase", "Moderator", "xFuckx", "Nazi_1"]) {
+    await check("names: refused name " + bad + " denied", assertFails(move(ub, "unb", { un: bad, ut: stamp(), add: [{ n: bad }] })));
+  }
+
+  await check("names: unb claims Bobby", assertSucceeds(move(ub, "unb", { un: "Bobby", ut: stamp(), add: [{ n: "Bobby" }] })));
+  await check("names: updating a names doc (set over it) denied", assertFails(setDoc(doc(ub, "names/bobby"), { u: "unb", n: "BOBBY" })));
+  await check("names: partial update of a names doc denied", assertFails(updateDoc(doc(ub, "names/bobby"), { n: "BOBBY" })));
+  await check("names: someone else updating a names doc denied", assertFails(setDoc(doc(ua, "names/bobby"), { u: "una", n: "Bobby" })));
+  await check("names: deleting your own name while pub still points at it denied", assertFails(deleteDoc(doc(ub, "names/bobby"))));
+  await check("names: a second name while keeping the first denied", assertFails(move(ub, "unb", { un: "Bobby", ut: await utOf("unb"), add: [{ n: "Robert" }] })));
+
+  await check("names: signed out can't create a names doc", assertFails(setDoc(doc(anon, "names/sneaky"), { u: "anon", n: "Sneaky" })));
+  await check("names: signed out can't delete a names doc", assertFails(deleteDoc(doc(anon, "names/bobby"))));
+  await check("names: signed out can't write pub", assertFails(setDoc(doc(anon, "pub/unb"), { x: X, y: Y, at: 1, un: "Bobby", q: qNext("pub/unb") })));
+
+  await check("week: a second change within 7 days denied", assertFails(move(ua, "una", { un: "Alice_2", ut: stamp(), add: [{ n: "Alice_2" }], del: ["alice_1"] })));
+  await check("week: removal within 7 days denied", assertFails(move(ua, "una", { ut: stamp(), del: ["alice_1"] })));
+  await check("week: a capitals-only change within 7 days denied", assertFails(move(ua, "una", { un: "ALICE_1", ut: stamp() })));
+  await backdate("una", WEEK - 3600000);
+  await check("week: 6 days 23 hours later still denied", assertFails(move(ua, "una", { un: "Alice_2", ut: stamp(), add: [{ n: "Alice_2" }], del: ["alice_1"] })));
+  await backdate("una", WEEK + 60000);
+  await check("week: a change without releasing the old name denied", assertFails(move(ua, "una", { un: "Alice_2", ut: stamp(), add: [{ n: "Alice_2" }] })));
+  await check("week: a change keeping ut denied", assertFails(move(ua, "una", { un: "Alice_2", ut: await utOf("una"), add: [{ n: "Alice_2" }], del: ["alice_1"] })));
+  await check("week: 7 days later a change (new name, old released, one batch) accepted", assertSucceeds(move(ua, "una", { un: "Alice_2", ut: stamp(), add: [{ n: "Alice_2" }], del: ["alice_1"] })));
+  await fact("week: the old names doc is gone and the new one is una's", !(await read("names/alice_1")) && (await read("names/alice_2")).u === "una", [await read("names/alice_1"), await read("names/alice_2")]);
+  await check("week: the released name is free for unc", assertSucceeds(move(uc, "unc", { un: "alice_1", ut: stamp(), add: [{ n: "alice_1" }] })));
+  await fact("week: names/alice_1 now belongs to unc", (await read("names/alice_1")).u === "unc", await read("names/alice_1"));
+  await check("week: right after the change another one denied", assertFails(move(ua, "una", { un: "ALICE_2", ut: stamp() })));
+  await backdate("una", WEEK + 60000);
+  await check("week: a capitals-only change (pub only, names doc kept) accepted", assertSucceeds(move(ua, "una", { un: "ALICE_2", ut: stamp() })));
+  await fact("week: the names doc keeps its key and owner", (await read("names/alice_2")).u === "una" && (await read("pub/una")).un === "ALICE_2", [await read("names/alice_2"), await read("pub/una")]);
+  await backdate("una", WEEK + 60000);
+  await check("week: removal deleting the names doc while pub still points at it denied", assertFails(move(ua, "una", { un: "ALICE_2", ut: await utOf("una"), del: ["alice_2"] })));
+  await check("week: removal (pub without un, new ut, names doc deleted) accepted", assertSucceeds(move(ua, "una", { ut: stamp(), del: ["alice_2"] })));
+  const p2 = await read("pub/una");
+  await fact("week: after removal pub has ut but no un, and the names doc is gone", !("un" in p2) && p2.ut && !(await read("names/alice_2")), p2);
+  await check("week: a new claim right after removal denied", assertFails(move(ua, "una", { un: "Alice_3", ut: stamp(), add: [{ n: "Alice_3" }] })));
+  await check("week: a pub rewrite keeping ut without un accepted", assertSucceeds(move(ua, "una", { ut: p2.ut, n: "Google Name" })));
+  await check("week: deleting a pub doc that holds ut denied", assertFails(deleteDoc(doc(ua, "pub/una"))));
+  await backdate("una", WEEK + 60000);
+  await check("week: a claim a week after removal accepted", assertSucceeds(move(ua, "una", { un: "Alice_3", ut: stamp(), add: [{ n: "Alice_3" }] })));
+  await check("names: a pub doc that never had a username can still be deleted", assertSucceeds(deleteDoc(doc(ud, "pub/und"))));
+  delete Q["pub/und"];
+
+  await seed("pub/une", { x: X, y: Y, at: 1 });
+  await check("names: a claim without today's seat denied", assertFails(move(ue, "une", { un: "Unseated", ut: stamp(), add: [{ n: "Unseated" }] })));
+}
+
 (async () => {
   const env = await initializeTestEnvironment({
     projectId: "demo-orbit-orchard",
@@ -371,6 +484,7 @@ async function feedback(env, alice, bob, anon) {
   await friends(env, alice, bob, anon);
   await allowance(env, alice, bob, anon);
   await feedback(env, alice, bob, anon);
+  await usernames(env, anon);
   await env.cleanup();
   console.log(failN ? `RULES FAIL ${failN} of ${pass + failN}` : `RULES PASS ${pass} checks`);
   process.exit(failN ? 1 : 0);

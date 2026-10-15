@@ -7,6 +7,7 @@ HTML="$SRC/orbit-orchard.html"
 SDK=$(sed -n 's/^ *const SDK = "\(https:[^"]*\)";/\1/p' "$SRC/js/backend-firebase.js")
 FONTS=$(grep -o 'https://fonts.googleapis.com/css2[^"]*' "$HTML" | head -1)
 fail() { echo "build: $1" >&2; exit 1; }
+[ -f "$SRC/js/firebase-config.js" ] || fail "js/firebase-config.js is missing: copy js/firebase-config.example.js to js/firebase-config.js and fill it in (see firebase/SETUP.md)"
 [ -n "$SDK" ] || fail "SDK url not found in js/backend-firebase.js"
 [ -n "$FONTS" ] || fail "Google Fonts link not found"
 grep -q '^</style>$' "$HTML" || fail "</style> line not found"
@@ -19,7 +20,7 @@ for f in $(grep -o '\(src\|href\)="\(js\|css\)/[^"]*"' "$HTML" | sed 's/^[a-z]*=
   mkdir -p "$OUT/$(dirname "$f")"
   cp "$SRC/$f" "$OUT/$f"
 done
-cp "$SRC/js/firebase-config.js" "$SRC/js/backend-firebase.js" "$SRC/js/friends-web.js" "$OUT/js/"
+cp "$SRC/js/firebase-config.js" "$SRC/js/backend-firebase.js" "$SRC/js/username.js" "$SRC/js/friends-web.js" "$OUT/js/"
 cp "$SRC/css/web.css" "$OUT/css/"
 
 {
@@ -36,13 +37,14 @@ cp "$SRC/css/web.css" "$OUT/css/"
   echo '<link rel="stylesheet" href="css/web.css">'
   echo '</head>'
   echo '<body>'
-  sed '1,/^<\/style>$/d' "$HTML" | sed 's#^<script src="js/ui.js"></script>$#<script src="js/firebase-config.js"></script>\n<script src="js/backend-firebase.js"></script>\n&#; s#^<script src="js/friends.js"></script>$#&\n<script src="js/friends-web.js"></script>#'
+  sed '1,/^<\/style>$/d' "$HTML" | sed 's#^<script src="js/ui.js"></script>$#<script src="js/firebase-config.js"></script>\n<script src="js/backend-firebase.js"></script>\n<script src="js/username.js"></script>\n&#; s#^<script src="js/friends.js"></script>$#&\n<script src="js/friends-web.js"></script>#'
   echo '<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>'
   echo '</body>'
   echo '</html>'
 } > "$OUT/index.html"
 
 grep -q '^<script src="js/friends-web.js"></script>$' "$OUT/index.html" || fail "friends-web.js not inserted"
+grep -q '^<script src="js/username.js"></script>$' "$OUT/index.html" || fail "username.js not inserted"
 grep -q 'ORCHARD_DEV *=' "$OUT/index.html" "$OUT"/js/*.js && fail "dev flag in the build"
 FILES=$(cd "$OUT" && find js css -type f | sort | sed 's/.*/"&"/' | paste -sd, -)
 FILES="\"./\",$FILES,\"${SDK}firebase-app.js\",\"${SDK}firebase-auth.js\",\"${SDK}firebase-firestore.js\""

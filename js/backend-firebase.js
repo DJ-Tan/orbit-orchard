@@ -37,7 +37,7 @@
     const m = /^users\/[^/]+\/data\/(save|friends|keys|pins|chal|sent)$/.exec(p);
     return m ? CAPS[m[1]] : /^pub\/[^/]+$/.test(p) ? CAPS.pub : /^cards\/[^/]+\/to\/[^/]+$/.test(p) ? CAPS.card : 0;
   };
-  const gateOf = (p) => (/^inbox\//.test(p) ? 2 : /^(codes|feedback)\//.test(p) ? 1 : 0);
+  const gateOf = (p) => (/^(inbox|names)\//.test(p) ? 2 : /^(codes|feedback)\//.test(p) ? 1 : 0);
   const strip = (d) => { if (!isObj(d) || !("q" in d)) return d; const c = Object.assign({}, d); delete c.q; return c; };
   const metaOf = (m) => ({ fromCache: !!(m && m.fromCache), hasPendingWrites: !!(m && m.hasPendingWrites) });
   const plainDoc = (id, d, m) => ({ id, exists: d !== undefined, data: () => (d === undefined ? undefined : JSON.parse(JSON.stringify(strip(d)))), metadata: metaOf(m) });
@@ -91,8 +91,11 @@
 
   function mapPath(path) {
     const m = /^data\/users\/([^/]+)\/([^/]+)$/.exec(path), f = /^feedback\/([^/]+)\/m\/(\d+-\d)$/.exec(path);
+    const n = /^names\/([a-z][a-z0-9_]{2,19})$/.exec(path), p = /^pub\/([A-Za-z0-9]{1,128})$/.exec(path);
     if (m) return fb.fs.doc(fb.db, "users", m[1], "data", m[2]);
     if (f) return fb.fs.doc(fb.db, "feedback", f[1], "m", f[2]);
+    if (n) return fb.fs.doc(fb.db, "names", n[1]);
+    if (p) return fb.fs.doc(fb.db, "pub", p[1]);
     throw Object.assign(new Error("Unsupported path " + path), { code: "invalid_argument" });
   }
 
@@ -248,7 +251,7 @@
       for (const o of ops) if (o[1] && capOf(o[0].path) && !known(o[0].path)) await get(o[0]);
       const qv = ops.map((o) => (o[1] && capOf(o[0].path) ? qOf(o[0].path) : null));
       if (qv.some((q, i) => q && q.n > capOf(ops[i][0].path))) throw resting();
-      await take(ops.length, qv.some((q) => q && q.n === 1) ? 1 : 0);
+      await take(ops.length, ops.reduce((n, o) => n + (o[1] ? gateOf(o[0].path) : 0), 0) + (qv.some((q) => q && q.n === 1) ? 1 : 0));
       const w = fb.fs.writeBatch(fb.db);
       ops.forEach((o, i) => (o[1] ? w.set(o[0], qv[i] ? Object.assign({}, o[1], { q: qv[i] }) : o[1]) : w.delete(o[0])));
       try { await w.commit(); }
@@ -350,6 +353,14 @@
     };
   }
 
+  /** Commits `[path, data]` sets and `[path, null]` deletes on mapped paths as one metered batch. */
+  function batchOf(ops) {
+    if (navigator.onLine === false) return Promise.reject({ code: "unavailable", message: "offline" });
+    let refs;
+    try { refs = ops.map((o) => [mapPath(o[0]), o[1] || null]); } catch (e) { return Promise.reject(e); }
+    return meter.batch(refs).catch((e) => { throw code(e, SET_CODES); });
+  }
+
   const userApi = {
     id: () => knownP.then(() => (account ? account.uid : null)),
     me: () => knownP.then(() => (account ? { id: account.uid, name: account.name, email: account.email, avatarUrl: account.photo } : null))
@@ -396,7 +407,7 @@
 
   root.OrchardWeb = {
     use(name) {
-      if (name === "db") return load().then(() => ({ doc: (path) => docRef(mapPath(path)) }));
+      if (name === "db") return load().then(() => ({ doc: (path) => docRef(mapPath(path)), batch: batchOf }));
       if (name === "user") return load().then(() => knownP).then(() => userApi);
       return Promise.resolve(null);
     },

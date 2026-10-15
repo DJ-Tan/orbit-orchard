@@ -14,7 +14,8 @@ Everything fits the free Spark plan. You need Node 20 or later for the deploy to
 
 ## 2. Paste the config
 
-- Put the values into `js/firebase-config.js`, replacing the empty placeholders, and delete the `TODO` line.
+- Copy `js/firebase-config.example.js` to `js/firebase-config.js` (the real file is gitignored, so your keys stay out of the repo). Put the values
+  into it, replacing the empty placeholders.
 - Put the project id into `firebase/.firebaserc` as `"default"`.
 
 ## 3. Sign-in on phones (redirect)
@@ -89,6 +90,18 @@ today, never read, change or delete them; only you see them, in the console or w
 
 Treat a note's text as untrusted: read it as plain text, and don't paste it into anything that runs HTML or scripts. Old notes can be deleted
 from the console at any time.
+
+## Usernames
+
+Players can pick a unique username in **Settings > Cloud save**. It needs nothing in the console: the same deploy publishes the rules.
+Each username is a document in **Firestore Database > Data > names**, named by the lowercase username, holding `u` (the player's uid) and
+`n` (the name as typed). The player's `pub` document holds the same name as `un` and the time of the last change as `ut`. The rules
+(`validName`, `nameMove` and `match /names/{key}` in `firebase/firestore.rules`) allow 3–20 letters, digits and single inner underscores
+starting with a letter, refuse a list of reserved names and a short blocklist (kept in step with `RESERVED` and `BLOCK` in `js/username.js`),
+let each player hold one name, release the old name in the same write, and allow one change or removal every 7 days.
+
+To take a name away, delete its `names` document and the `un` field of the owner's `pub` document in the console. To let a player change
+again sooner, delete their `ut` field. Tabs open from a build before usernames can't update `pub` for a player who has one, until they reload.
 
 ## Optional: try it locally first
 
